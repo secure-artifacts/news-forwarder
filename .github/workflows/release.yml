@@ -40,6 +40,8 @@ jobs:
           cp -R app tests main.py README.md requirements.txt pyproject.toml MANIFEST.in release/news-forwarder/
           cp config.example.yaml release/news-forwarder/config.yaml
           cp .env.example Dockerfile docker-compose.yml start.ps1 start-one-click.ps1 "一键启动.bat" release/news-forwarder/
+          find release -type d -name __pycache__ -prune -exec rm -rf {} +
+          find release -type f -name '*.py[co]' -delete
           cd release
           zip -r "../dist/news-forwarder-${RELEASE_TAG}.zip" news-forwarder
 

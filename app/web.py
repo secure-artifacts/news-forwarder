@@ -73,7 +73,7 @@ def create_app(settings: Settings) -> FastAPI:
         scheduler.shutdown()
         local_model.stop()
 
-    app = FastAPI(title="国际新闻转发器", version="1.0.1", lifespan=lifespan)
+    app = FastAPI(title="国际新闻转发器", version="1.0.2", lifespan=lifespan)
 
     @app.get("/", include_in_schema=False)
     def index():
