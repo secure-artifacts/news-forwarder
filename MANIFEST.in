@@ -1,0 +1,16 @@
+include README.md
+include requirements.txt
+include config.example.yaml
+include Dockerfile
+include docker-compose.yml
+include start.ps1
+include start-one-click.ps1
+include 一键启动.bat
+recursive-include app/static *.html
+recursive-include tests *.py
+global-exclude .env
+global-exclude service-account*.json
+global-exclude *.db
+global-exclude *.log
+global-exclude *.py[cod]
+global-exclude __pycache__

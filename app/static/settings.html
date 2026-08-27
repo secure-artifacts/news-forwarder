@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>设置 · 国际新闻转发器</title>
+  <style>
+    :root{color-scheme:dark;--bg:#07111f;--panel:#0f1d30;--line:#203650;--text:#edf5ff;--muted:#91a8c4;--cyan:#55d9d2;--orange:#ffb35b;--red:#ff7c7c}
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,"Segoe UI","Microsoft YaHei",sans-serif;background:radial-gradient(circle at 20% 0,#133251 0,transparent 38%),var(--bg);color:var(--text)}
+    main{width:min(1100px,calc(100% - 32px));margin:auto;padding:38px 0 90px} header{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:26px}
+    h1{font-size:clamp(30px,5vw,48px);margin:0;letter-spacing:-.035em}.sub,.hint{color:var(--muted)}.sub{margin:7px 0 0}.back{color:var(--text);text-decoration:none;border:1px solid var(--line);padding:11px 15px;border-radius:12px}
+    .section{background:#0f1d30e6;border:1px solid var(--line);border-radius:17px;padding:22px;margin-bottom:18px}.section-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:18px}h2{margin:0;font-size:19px}
+    .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}.grid.three{grid-template-columns:repeat(3,1fr)}label{display:block;color:var(--muted);font-size:13px}input,select,textarea{width:100%;margin-top:7px;background:#091728;border:1px solid var(--line);border-radius:10px;color:var(--text);padding:11px 12px;font:inherit;outline:none}input:focus,select:focus,textarea:focus{border-color:var(--cyan)}textarea{min-height:78px;resize:vertical}
+    input[type=checkbox]{width:18px;height:18px;margin:0;accent-color:var(--cyan)}.check{display:flex;align-items:center;gap:9px;color:var(--text);font-size:14px}.check-row{display:flex;gap:24px;flex-wrap:wrap;margin-bottom:17px}
+    button{border:0;border-radius:11px;background:var(--cyan);color:#06201e;padding:11px 17px;font-weight:800;cursor:pointer}button.secondary{background:#17304a;color:var(--text);border:1px solid var(--line)}button.danger{background:transparent;color:var(--red);border:1px solid #663b48}button:disabled{opacity:.5}
+    .country{border:1px solid var(--line);border-radius:14px;padding:17px;margin-bottom:13px;background:#09172888}.country-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.country-title{font-weight:800;color:var(--cyan)}
+    .status{display:inline-flex;border:1px solid var(--line);border-radius:99px;padding:4px 9px;color:var(--cyan);font-size:12px;margin-left:7px}.secret-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}
+    .savebar{position:fixed;left:0;right:0;bottom:0;background:#07111fe8;backdrop-filter:blur(16px);border-top:1px solid var(--line);padding:13px}.savebar-inner{width:min(1100px,calc(100% - 32px));margin:auto;display:flex;justify-content:space-between;align-items:center}.message{color:var(--muted)}
+    @media(max-width:760px){.grid,.grid.three{grid-template-columns:1fr}.secret-row{grid-template-columns:1fr}.section{padding:17px}header{align-items:flex-start}.savebar-inner{gap:12px}.message{font-size:12px}}
+  </style>
+</head>
+<body>
+<main>
+  <header><div><h1>设置中心</h1><p class="sub">国家、发送渠道与翻译服务统一在这里管理</p></div><a class="back" href="/">← 返回主页</a></header>
+
+  <section class="section">
+    <div class="section-head"><div><h2>国家与地区</h2><div class="hint">只需填写名称和基础搜索词；内部编号由系统自动生成。关键词和网站都支持填写多个。</div></div><button type="button" onclick="addCountry()">＋ 添加国家</button></div>
+    <div id="countries"></div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><h2>发送渠道</h2></div>
+    <div class="check-row">
+      <label class="check"><input id="teamsEnabled" type="checkbox"> 启用 Microsoft Teams</label>
+      <label class="check"><input id="sheetsEnabled" type="checkbox"> 启用 Google Sheets</label>
+      <label class="check"><input id="autoDelivery" type="checkbox"> 按下方时间抓取并自动写入已启用渠道</label>
+    </div>
+    <div class="grid">
+      <div>
+        <label>Teams Workflows Webhook <span class="status" id="teamsSecretStatus">未配置</span><input id="teamsWebhook" type="password" placeholder="留空则保留已有 Webhook"></label>
+        <label class="check" style="margin-top:10px"><input id="clearTeamsWebhook" type="checkbox"> 清除已有 Webhook</label>
+      </div>
+      <label>Teams 消息格式<select id="teamsMode"><option value="adaptive_card">Adaptive Card</option><option value="text">简单文本</option></select></label>
+      <label>Google Spreadsheet ID<input id="spreadsheetId" autocomplete="off"></label>
+      <label>工作表名称<input id="worksheetName" value="News"></label>
+      <label style="grid-column:1/-1">Google 服务账号 JSON 完整路径<input id="credentialsPath" autocomplete="off" placeholder="C:\path\service-account.json"></label>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><div><h2>中文重点翻译</h2><div class="hint">只根据标题和提取出的关键句生成中文标题、重点摘要，不翻译全文。</div></div></div>
+    <div class="check-row"><label class="check"><input id="translationEnabled" type="checkbox"> 启用中文整理</label></div>
+    <div class="grid">
+      <label>翻译方式<select id="provider" onchange="providerChanged()"><option value="local_llama">本地 TranslateGemma（无密钥）</option><option value="gemini">Google Gemini API</option><option value="groq">Groq API</option><option value="openai">OpenAI API</option></select></label>
+      <label>模型名称<input id="model" autocomplete="off"></label>
+      <div>
+        <label>API Key <span class="status" id="apiKeyStatus">未配置</span><input id="apiKey" type="password" placeholder="本地模式无需填写；留空保留已有密钥"></label>
+        <label class="check" style="margin-top:10px"><input id="clearApiKey" type="checkbox"> 清除已有 API Key</label>
+      </div>
+      <div class="hint" style="align-self:center">Gemini、Groq、OpenAI 需要各自的 API Key。本地模式完全离线。</div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><div><h2>定时更新</h2><div class="hint">启用上方自动写入后，系统会在这里设置的时间抓取新闻并写入 Google Sheets，也可同时发送 Teams。</div></div></div>
+    <div class="grid three">
+      <label>时区<input id="timezone" value="Europe/Lisbon"></label>
+      <label>每天几点（0–23）<input id="scheduleHour" type="number" min="0" max="23"></label>
+      <label>分钟（0–59）<input id="scheduleMinute" type="number" min="0" max="59"></label>
+      <label>新闻最大时效（小时）<input id="maxAgeHours" type="number" min="1" max="168"></label>
+      <label>每个国家最多条数<input id="maxArticles" type="number" min="1" max="100"></label>
+    </div>
+  </section>
+</main>
+<div class="savebar"><div class="savebar-inner"><div class="message" id="message">修改后点击保存</div><button id="saveButton" onclick="saveSettings()">保存全部设置</button></div></div>
+<script>
+  let state=null, token='';
+  const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+  const value=id=>document.getElementById(id).value;
+  const checked=id=>document.getElementById(id).checked;
+  function countryCard(c={}){
+    const id=c.id||'';
+    return `<div class="country" data-country-id="${esc(id)}"><div class="country-head"><span class="country-title">${esc(c.name||'新国家/地区')}</span><button type="button" class="danger" onclick="this.closest('.country').remove()">删除</button></div>
+      <div class="grid three">
+        <label>显示名称<input data-k="name" value="${esc(c.name||'')}" placeholder="例如 佛得角" oninput="this.closest('.country').querySelector('.country-title').textContent=this.value||'新国家/地区'"></label>
+        <label style="grid-column:span 2">国家基础搜索词<input data-k="query" value="${esc(c.query||'')}" placeholder="例如 Cabo Verde；也可写 Cabo Verde OR Cape Verde"></label>
+        <label style="grid-column:1/-1">新闻关键词（多个用逗号或换行分开）<textarea data-k="keywords" placeholder="economy, government, investment">${esc((c.keywords||[]).join('\n'))}</textarea></label>
+        <label style="grid-column:1/-1">优先新闻网站（填写域名，多个用逗号或换行分开）<textarea data-k="preferred_domains" placeholder="reuters.com&#10;bbc.com&#10;dw.com">${esc((c.preferred_domains||[]).join('\n'))}</textarea><span class="hint">系统先从这些网站搜索，不足时再从其他国际网站补充。</span></label>
+        <label style="grid-column:1/-1">排除关键词（多个用逗号或换行分开）<input data-k="exclude_keywords" value="${esc((c.exclude_keywords||[]).join(', '))}" placeholder="football, celebrity"></label>
+        <details style="grid-column:1/-1"><summary style="cursor:pointer;color:var(--muted)">高级语言与地区设置（一般不需要修改）</summary><div class="grid three" style="margin-top:13px">
+          <label>Google News 语言<input data-k="language" value="${esc(c.language||'en-US')}" placeholder="pt-PT"></label>
+          <label>搜索地区代码<input data-k="region" value="${esc(c.region||'US')}" placeholder="PT"></label>
+          <label>CEID<input data-k="ceid" value="${esc(c.ceid||'US:en')}" placeholder="PT:pt-150"></label>
+          <label>原文语言<input data-k="source_language" value="${esc(c.source_language||'English')}" placeholder="Portuguese"></label>
+          <label>原文语言代码<input data-k="source_code" value="${esc(c.source_code||'en')}" placeholder="pt"></label>
+        </div></details>
+      </div></div>`;
+  }
+  function addCountry(){ document.getElementById('countries').insertAdjacentHTML('beforeend',countryCard()); }
+  async function loadSettings(){
+    token=localStorage.getItem('news-admin-token')||'';
+    let response=await fetch('/api/settings',{headers:{'X-Admin-Token':token}});
+    if(response.status===401){ token=prompt('请输入管理令牌：')||''; if(token)localStorage.setItem('news-admin-token',token); response=await fetch('/api/settings',{headers:{'X-Admin-Token':token}}); }
+    if(!response.ok){ document.getElementById('message').textContent='无法读取设置'; return; }
+    state=await response.json(); render();
+  }
+  function render(){
+    document.getElementById('countries').innerHTML=state.countries.map(countryCard).join('');
+    const d=state.destinations,t=state.translation,a=state.app;
+    document.getElementById('teamsEnabled').checked=d.teams.enabled;
+    document.getElementById('sheetsEnabled').checked=d.google_sheets.enabled;
+    document.getElementById('autoDelivery').checked=d.automatic_delivery;
+    document.getElementById('teamsMode').value=d.teams.payload_mode||'adaptive_card';
+    document.getElementById('spreadsheetId').value=d.google_sheets.spreadsheet_id||'';
+    document.getElementById('worksheetName').value=d.google_sheets.worksheet_name||'News';
+    document.getElementById('credentialsPath').value=d.google_sheets.credentials_path||'';
+    document.getElementById('teamsSecretStatus').textContent=d.teams.webhook_configured?'已配置':'未配置';
+    document.getElementById('translationEnabled').checked=t.enabled;
+    document.getElementById('provider').value=t.provider;
+    document.getElementById('model').value=t.model||state.provider_defaults[t.provider];
+    document.getElementById('apiKeyStatus').textContent=t.api_key_configured?'已配置':'未配置';
+    document.getElementById('timezone').value=a.timezone;
+    document.getElementById('scheduleHour').value=a.schedule_hour;
+    document.getElementById('scheduleMinute').value=a.schedule_minute;
+    document.getElementById('maxAgeHours').value=a.max_age_hours;
+    document.getElementById('maxArticles').value=a.max_articles_per_country;
+    providerChanged(false);
+  }
+  function providerChanged(reset=true){ const p=value('provider'); if(reset&&state)document.getElementById('model').value=state.provider_defaults[p]; const local=p==='local_llama'; document.getElementById('apiKey').disabled=local; document.getElementById('clearApiKey').disabled=local; }
+  function countriesPayload(){ return [...document.querySelectorAll('.country')].map(card=>{ const o={id:card.dataset.countryId||''}; card.querySelectorAll('[data-k]').forEach(i=>o[i.dataset.k]=i.value); return o; }); }
+  async function saveSettings(){
+    const payload={countries:countriesPayload(),app:{timezone:value('timezone'),schedule_hour:+value('scheduleHour'),schedule_minute:+value('scheduleMinute'),max_age_hours:+value('maxAgeHours'),max_articles_per_country:+value('maxArticles')},destinations:{automatic_delivery:checked('autoDelivery'),teams:{enabled:checked('teamsEnabled'),payload_mode:value('teamsMode'),max_articles_per_message:8,webhook_url:value('teamsWebhook'),clear_webhook:checked('clearTeamsWebhook')},google_sheets:{enabled:checked('sheetsEnabled'),spreadsheet_id:value('spreadsheetId'),worksheet_name:value('worksheetName'),credentials_path:value('credentialsPath')}},translation:{enabled:checked('translationEnabled'),provider:value('provider'),model:value('model'),api_key:value('apiKey'),clear_api_key:checked('clearApiKey')}};
+    const button=document.getElementById('saveButton'); button.disabled=true; document.getElementById('message').textContent='正在保存…';
+    try{ const response=await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json','X-Admin-Token':token},body:JSON.stringify(payload)}); const data=await response.json(); document.getElementById('message').textContent=data.message||data.detail; if(response.ok)await loadSettings(); }
+    catch(e){document.getElementById('message').textContent='保存失败：'+e.message} finally{button.disabled=false}
+  }
+  loadSettings();
+</script>
+</body>
+</html>

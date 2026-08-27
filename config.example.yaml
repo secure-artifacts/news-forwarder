@@ -1,0 +1,358 @@
+app:
+  timezone: Europe/Lisbon
+  schedule_hour: 8
+  schedule_minute: 0
+  database_path: data/news.db
+  max_age_hours: 36
+  max_articles_per_country: 30
+translation:
+  enabled: true
+  provider: local_llama
+  model: translategemma-4b
+  base_url: http://127.0.0.1:11435
+  source_language: Portuguese
+  source_code: pt
+  key_points_only: true
+destinations:
+  automatic_delivery: false
+  teams:
+    enabled: false
+    payload_mode: adaptive_card
+    max_articles_per_message: 8
+  google_sheets:
+    enabled: true
+    worksheet_name: News
+source_policy:
+  require_https: true
+  allowed_domains: []
+  blocked_domain_suffixes:
+  - .cn
+  - xinhuanet.com
+  - people.com.cn
+  - chinadaily.com.cn
+  - cgtn.com
+  - globaltimes.cn
+  - china.com.cn
+  - cctv.com
+  blocked_source_words:
+  - 新华
+  - 人民日报
+  - 中国日报
+  - 环球时报
+  - 央视
+  - CGTN
+  - Xinhua
+countries:
+- id: angola
+  name: 安哥拉
+  query: Angola
+  language: pt-PT
+  region: PT
+  ceid: PT:pt-150
+  source_language: Portuguese
+  source_code: pt
+  keywords:
+  - desastre natural
+  - calamidade pública
+  - emergência humanitária
+  - mudanças climáticas
+  - inundação
+  - cheias
+  - chuva intensa
+  - deslizamento de terra
+  - ciclone tropical
+  - tempestade
+  - ventos fortes
+  - seca
+  - estiagem
+  - escassez de alimentos
+  - fome
+  - surtos de doenças
+  - cólera
+  - malária
+  - vítimas
+  - deslocados
+  - danos materiais
+  - ajuda humanitária
+  - INGD
+  - INAM
+  - Cabo Delgado
+  - Sofala
+  - Beira
+  - Gaza
+  - Rio Limpopo
+  - INAMET
+  - Proteção Civil Angola
+  - Cunene
+  - Namibe
+  - Huíla
+  - Luanda
+  - natural disaster
+  - state of calamity
+  - humanitarian emergency
+  - climate change
+  - floods
+  - flash floods
+  - torrential rain
+  - landslide
+  - tropical cyclone
+  - storm
+  - severe winds
+  - severe drought
+  - food insecurity
+  - famine
+  - disease outbreak
+  - cholera
+  - malaria
+  - casualties
+  - displaced persons
+  - property damage
+  - humanitarian aid
+  - desastre natural
+  - calamidade pública
+  - emergência humanitária
+  - mudanças climáticas
+  - inundação
+  - cheias
+  - chuva intensa
+  - deslizamento de terra
+  - ciclone tropical
+  - tempestade
+  - ventos fortes
+  - seca
+  - estiagem
+  - escassez de alimentos
+  - fome
+  - surtos de doenças
+  - cólera
+  - malária
+  - vítimas
+  - deslocados
+  - danos materiais
+  - ajuda humanitária
+  - INGD
+  - INAM
+  - Cabo Delgado
+  - Sofala
+  - Beira
+  - Gaza
+  - Rio Limpopo
+  - INAMET
+  - Proteção Civil Angola
+  - Cunene
+  - Namibe
+  - Huíla
+  - Luanda
+  - enxurrada
+  - transbordo de rios
+  - ressaca do mar
+  - erosão costeira
+  - depressão tropical
+  - onda de calor
+  - granizo
+  - evacuação
+  - desabrigados
+  - desaparecidos
+  - destruição de infraestruturas
+  - perda de safras
+  - destruição de culturas
+  - situação de emergência
+  - corredor humanitário
+  - Rio Zambeze
+  - Rio Púnguè
+  - Nampula
+  - Inhambane
+  - Rio Cubango
+  - Benguela
+  - Huambo
+  - natural disaster
+  - state of calamity
+  - humanitarian emergency
+  - climate change
+  - floods
+  - flash floods
+  - torrential rain
+  - landslide
+  - tropical cyclone
+  - storm
+  - severe winds
+  - severe drought
+  - food insecurity
+  - famine
+  - disease outbreak
+  - cholera
+  - malaria
+  - casualties
+  - displaced persons
+  - property damage
+  - humanitarian aid
+  - coastal erosion
+  - heatwave
+  - evacuation
+  - missing persons
+  - infrastructure damage
+  - crop loss
+  exclude_keywords:
+  - futebol
+  - celebridade
+  preferred_domains:
+  - jornaldeangola.ao
+  - angonoticias.com
+  - expansao.co.ao
+- id: mozambique
+  name: 莫桑比克
+  query: Mozambique OR Moçambique
+  language: pt-PT
+  region: PT
+  ceid: PT:pt-150
+  source_language: Portuguese
+  source_code: pt
+  keywords:
+  - desastre natural
+  - calamidade pública
+  - emergência humanitária
+  - mudanças climáticas
+  - inundação
+  - cheias
+  - chuva intensa
+  - deslizamento de terra
+  - ciclone tropical
+  - tempestade
+  - ventos fortes
+  - seca
+  - estiagem
+  - escassez de alimentos
+  - fome
+  - surtos de doenças
+  - cólera
+  - malária
+  - vítimas
+  - deslocados
+  - danos materiais
+  - ajuda humanitária
+  - INGD
+  - INAM
+  - Cabo Delgado
+  - Sofala
+  - Beira
+  - Gaza
+  - Rio Limpopo
+  - INAMET
+  - Proteção Civil Angola
+  - Cunene
+  - Namibe
+  - Huíla
+  - Luanda
+  - natural disaster
+  - state of calamity
+  - humanitarian emergency
+  - climate change
+  - floods
+  - flash floods
+  - torrential rain
+  - landslide
+  - tropical cyclone
+  - storm
+  - severe winds
+  - severe drought
+  - food insecurity
+  - famine
+  - disease outbreak
+  - cholera
+  - malaria
+  - casualties
+  - displaced persons
+  - property damage
+  - humanitarian aid
+  - desastre natural
+  - calamidade pública
+  - emergência humanitária
+  - mudanças climáticas
+  - inundação
+  - cheias
+  - chuva intensa
+  - deslizamento de terra
+  - ciclone tropical
+  - tempestade
+  - ventos fortes
+  - seca
+  - estiagem
+  - escassez de alimentos
+  - fome
+  - surtos de doenças
+  - cólera
+  - malária
+  - vítimas
+  - deslocados
+  - danos materiais
+  - ajuda humanitária
+  - INGD
+  - INAM
+  - Cabo Delgado
+  - Sofala
+  - Beira
+  - Gaza
+  - Rio Limpopo
+  - INAMET
+  - Proteção Civil Angola
+  - Cunene
+  - Namibe
+  - Huíla
+  - Luanda
+  - enxurrada
+  - transbordo de rios
+  - ressaca do mar
+  - erosão costeira
+  - depressão tropical
+  - onda de calor
+  - granizo
+  - evacuação
+  - desabrigados
+  - desaparecidos
+  - destruição de infraestruturas
+  - perda de safras
+  - destruição de culturas
+  - situação de emergência
+  - corredor humanitário
+  - Rio Zambeze
+  - Rio Púnguè
+  - Nampula
+  - Inhambane
+  - Rio Cubango
+  - Benguela
+  - Huambo
+  - natural disaster
+  - state of calamity
+  - humanitarian emergency
+  - climate change
+  - floods
+  - flash floods
+  - torrential rain
+  - landslide
+  - tropical cyclone
+  - storm
+  - severe winds
+  - severe drought
+  - food insecurity
+  - famine
+  - disease outbreak
+  - cholera
+  - malaria
+  - casualties
+  - displaced persons
+  - property damage
+  - humanitarian aid
+  - coastal erosion
+  - heatwave
+  - evacuation
+  - missing persons
+  - infrastructure damage
+  - crop loss
+  exclude_keywords:
+  - futebol
+  - celebridade
+  preferred_domains:
+  - clubofmozambique.com
+  - opais.co.mz
+  - verdade.co.mz
+  - lusa.pt

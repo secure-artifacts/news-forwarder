@@ -1,0 +1,1 @@
+"""News Forwarder application package."""

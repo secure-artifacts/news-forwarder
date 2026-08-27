@@ -1,0 +1,14 @@
+services:
+  news-forwarder:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./data:/app/data
+      # Change the left-hand path to your service-account JSON file.
+      - ./secrets/google-service-account.json:/run/secrets/google-service-account.json:ro
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google-service-account.json

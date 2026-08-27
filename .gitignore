@@ -1,0 +1,33 @@
+# Secrets and local settings
+.env
+.env.*
+!.env.example
+config.yaml
+service-account*.json
+*credentials*.json
+*secret*.json
+secrets/
+
+# Runtime state and downloaded models
+data/
+runtime/
+local_models/
+*.log
+
+# Python / tests / builds
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

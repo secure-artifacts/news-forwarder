@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>国际新闻转发器</title>
+  <style>
+    :root { color-scheme: dark; --bg:#07111f; --panel:#0f1d30; --line:#203650; --text:#edf5ff; --muted:#91a8c4; --cyan:#55d9d2; --orange:#ffb35b; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Inter,"Segoe UI","Microsoft YaHei",sans-serif; background:radial-gradient(circle at 20% 0,#133251 0,transparent 42%),var(--bg); color:var(--text); }
+    main { width:min(1180px,calc(100% - 32px)); margin:0 auto; padding:42px 0 70px; }
+    header { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; margin-bottom:28px; }
+    h1 { margin:0; font-size:clamp(30px,5vw,52px); letter-spacing:-.04em; }
+    .eyebrow { color:var(--cyan); text-transform:uppercase; letter-spacing:.18em; font-size:12px; font-weight:700; margin-bottom:8px; }
+    .sub { color:var(--muted); margin:8px 0 0; }
+    .actions { display:flex; gap:10px; flex-wrap:wrap; }
+    button { border:0; border-radius:12px; background:var(--cyan); color:#06201e; padding:13px 20px; font-weight:800; cursor:pointer; box-shadow:0 8px 30px #55d9d233; }
+    button.secondary { background:var(--orange); color:#291604; box-shadow:0 8px 30px #ffb35b2b; }
+    button:disabled { opacity:.5; cursor:wait; }
+    .grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:22px; }
+    .card { background:#0f1d30d9; border:1px solid var(--line); border-radius:16px; padding:18px; backdrop-filter:blur(12px); }
+    .label { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.1em; }
+    .value { font-size:27px; font-weight:760; margin-top:9px; }
+    .ready { color:var(--cyan); } .warn { color:var(--orange); }
+    .panel-head { display:flex; justify-content:space-between; gap:20px; align-items:center; margin-bottom:12px; }
+    h2 { font-size:18px; margin:0; }
+    .run { color:var(--muted); font-size:13px; }
+    .article { display:grid; grid-template-columns:110px 1fr 110px; gap:18px; padding:18px 0; border-top:1px solid var(--line); align-items:start; }
+    .country { color:var(--cyan); font-weight:700; }
+    .article h3 { margin:0 0 7px; font-size:17px; line-height:1.45; }
+    .article p { margin:0; color:var(--muted); font-size:14px; line-height:1.65; }
+    a { color:var(--orange); text-decoration:none; } a:hover { text-decoration:underline; }
+    .badges { margin-top:8px; display:flex; gap:7px; }
+    .badge { border:1px solid var(--line); border-radius:999px; color:var(--muted); font-size:11px; padding:3px 7px; }
+    .empty { color:var(--muted); text-align:center; padding:50px 0; }
+    .dispatch { display:flex; align-items:center; justify-content:space-between; gap:18px; margin-bottom:22px; }
+    .targets { display:flex; gap:20px; flex-wrap:wrap; margin-top:10px; }
+    .targets label { display:flex; align-items:center; gap:8px; color:var(--text); cursor:pointer; }
+    .targets input { accent-color:var(--cyan); width:18px; height:18px; }
+    .settings-link { border:1px solid var(--line); border-radius:12px; padding:12px 15px; color:var(--text); }
+    .log-window { height:310px; overflow:auto; background:#06101d; border:1px solid #172c43; border-radius:12px; padding:8px 0; font-family:"Cascadia Mono",Consolas,"Microsoft YaHei",monospace; }
+    .log-line { display:grid; grid-template-columns:82px 72px 1fr; gap:10px; padding:7px 13px; border-bottom:1px solid #11243a; font-size:12px; line-height:1.55; }
+    .log-line:last-child { border-bottom:0; }.log-time{color:#6f89a8}.log-level{font-weight:800}.log-message{color:#c9d9ec;word-break:break-word}
+    .log-info .log-level{color:#73b8e8}.log-success .log-level{color:var(--cyan)}.log-warning .log-level{color:var(--orange)}.log-error .log-level{color:#ff8585}
+    .live { display:inline-flex;align-items:center;gap:7px;color:var(--muted) }.live.running{color:var(--cyan)}.live.running::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--cyan);box-shadow:0 0 0 5px #55d9d21b;animation:pulse 1.2s infinite}
+    @keyframes pulse{50%{opacity:.35}}.log-note{color:var(--muted);font-size:12px}
+    #toast { position:fixed; right:20px; bottom:20px; background:#172b42; border:1px solid var(--line); border-radius:12px; padding:13px 18px; display:none; }
+    @media(max-width:800px){ header{align-items:flex-start;flex-direction:column}.grid{grid-template-columns:repeat(2,1fr)}.article{grid-template-columns:1fr}.source{text-align:left} }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div><div class="eyebrow">Daily Intelligence Feed</div><h1>国际新闻转发器</h1><p class="sub" id="subtitle">正在读取配置…</p></div>
+    <div class="actions">
+      <a class="settings-link" href="/settings">设置</a>
+      <button id="runButton" onclick="runNow()">抓取并整理新闻</button>
+    </div>
+  </header>
+  <section class="grid">
+    <div class="card"><div class="label">已收集</div><div class="value" id="total">—</div></div>
+    <div class="card"><div class="label">Teams</div><div class="value" id="teams">—</div></div>
+    <div class="card"><div class="label">Google Sheets</div><div class="value" id="sheets">—</div></div>
+    <div class="card"><div class="label">中文翻译</div><div class="value" id="translation">—</div></div>
+  </section>
+  <section class="card dispatch">
+    <div><div class="label">发送目标</div><div class="targets">
+      <label><input type="checkbox" id="targetSheets"> Google Sheets</label>
+      <label><input type="checkbox" id="targetTeams"> Microsoft Teams</label>
+    </div></div>
+    <button class="secondary" id="sendButton" onclick="sendSelected()">发送到所选目标</button>
+  </section>
+  <section class="card" style="margin-bottom:22px">
+    <div class="panel-head"><div><h2>运行日志</h2><div class="log-note">显示搜索网站、候选数量、正文解析、去重、翻译和写入进度</div></div><div class="live" id="logStatus">等待任务</div></div>
+    <div class="log-window" id="logs"><div class="empty">还没有运行日志，点击“抓取并整理新闻”开始。</div></div>
+  </section>
+  <section class="card">
+    <div class="panel-head"><h2>最新新闻</h2><div class="run" id="lastRun"></div></div>
+    <div id="articles"><div class="empty">尚无数据，点击“立即抓取”开始。</div></div>
+  </section>
+</main>
+<div id="toast"></div>
+<script>
+  let tokenRequired = false;
+  let refreshing = false;
+  const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+  function readyLabel(ok, pending) { return `<span class="${ok ? 'ready':'warn'}">${ok ? (pending ? pending+' 待发送':'已连接') : '未配置'}</span>`; }
+  async function refresh(){
+    if(refreshing) return; refreshing=true;
+    let data;
+    try { data = await fetch('/api/status').then(r=>r.json()); } catch(e) { refreshing=false; return; }
+    tokenRequired = data.config.token_required;
+    document.querySelector('#subtitle').textContent = `${data.config.countries.join('、')} · 每天 ${data.config.schedule} (${data.config.timezone})`;
+    document.querySelector('#total').textContent = data.stats.total || 0;
+    document.querySelector('#teams').innerHTML = data.config.teams_enabled ? readyLabel(data.config.teams_ready, data.stats.teams_pending) : '<span class="warn">已停用</span>';
+    document.querySelector('#sheets').innerHTML = data.config.sheets_enabled ? readyLabel(data.config.sheets_ready, data.stats.sheets_pending) : '<span class="warn">已停用</span>';
+    document.querySelector('#translation').innerHTML = readyLabel(data.config.translation_ready, 0).replace('已连接','已启用');
+    document.querySelector('#runButton').disabled = data.running;
+    document.querySelector('#runButton').textContent = data.running ? '处理中…' : '抓取并整理新闻';
+    const sheetsTarget = document.querySelector('#targetSheets');
+    const teamsTarget = document.querySelector('#targetTeams');
+    sheetsTarget.disabled = !(data.config.sheets_enabled && data.config.sheets_ready);
+    teamsTarget.disabled = !(data.config.teams_enabled && data.config.teams_ready);
+    if(!sheetsTarget.dataset.initialized){ sheetsTarget.checked = !sheetsTarget.disabled; sheetsTarget.dataset.initialized='1'; }
+    if(!teamsTarget.dataset.initialized){ teamsTarget.checked = !teamsTarget.disabled; teamsTarget.dataset.initialized='1'; }
+    const run = data.latest_run;
+    const statusNames={success:'成功',partial:'部分完成',failed:'失败',running:'运行中'};
+    document.querySelector('#lastRun').textContent = run ? `上次运行：${statusNames[run.status]||run.status} · 新增 ${run.collected_count}` : '';
+    const logStatus=document.querySelector('#logStatus');
+    logStatus.className='live'+(data.running?' running':'');
+    logStatus.textContent=data.running?'正在处理…':(run?`已完成 · 新增 ${run.collected_count}`:'等待任务');
+    const logBox=document.querySelector('#logs');
+    const stickToBottom=logBox.scrollHeight-logBox.scrollTop-logBox.clientHeight<55 || data.running;
+    const levels={info:'进行',success:'成功',warning:'提醒',error:'错误'};
+    logBox.innerHTML=(data.logs||[]).length ? data.logs.map(item=>{
+      const time=new Date(item.created_at).toLocaleTimeString('zh-CN',{hour12:false});
+      return `<div class="log-line log-${esc(item.level)}"><span class="log-time">${esc(time)}</span><span class="log-level">${levels[item.level]||esc(item.level)}</span><span class="log-message">${esc(item.message)}</span></div>`;
+    }).join('') : '<div class="empty">还没有运行日志，点击“抓取并整理新闻”开始。</div>';
+    if(stickToBottom) logBox.scrollTop=logBox.scrollHeight;
+    document.querySelector('#articles').innerHTML = data.articles.length ? data.articles.map(a => `
+      <article class="article">
+        <div class="country">${esc(a.country_name)}</div>
+        <div><h3>${esc(a.title_zh || a.title)}</h3><p>${esc(a.summary_zh || a.summary || '暂无摘要')}</p><div class="badges"><span class="badge">Teams ${a.teams_sent?'✓':'…'}</span><span class="badge">Sheets ${a.sheets_sent?'✓':'…'}</span></div></div>
+        <div class="source"><a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">${esc(a.source)} ↗</a></div>
+      </article>`).join('') : '<div class="empty">尚无数据，点击“抓取并整理新闻”开始。</div>';
+    refreshing=false;
+  }
+  async function runNow(){
+    let token = '';
+    if(tokenRequired){
+      token = localStorage.getItem('news-admin-token') || (prompt('请输入管理令牌：') || '');
+      if(token) localStorage.setItem('news-admin-token', token);
+    }
+    const response = await fetch('/api/run',{method:'POST',headers:{'X-Admin-Token':token}});
+    const data = await response.json();
+    const toast = document.querySelector('#toast'); toast.textContent = data.message || data.detail; toast.style.display='block'; setTimeout(()=>toast.style.display='none',3000);
+    refresh(); setTimeout(()=>document.querySelector('#logs').scrollIntoView({behavior:'smooth',block:'center'}),250);
+  }
+  async function sendSelected(){
+    let token = '';
+    if(tokenRequired){
+      token = localStorage.getItem('news-admin-token') || (prompt('请输入管理令牌：') || '');
+      if(token) localStorage.setItem('news-admin-token', token);
+    }
+    const targets = {sheets:document.querySelector('#targetSheets').checked,teams:document.querySelector('#targetTeams').checked};
+    if(!targets.sheets && !targets.teams){ showToast('请至少选择一个发送目标'); return; }
+    const button = document.querySelector('#sendButton');
+    button.disabled = true; button.textContent = '发送中…';
+    try {
+      const response = await fetch('/api/send-selected',{method:'POST',headers:{'X-Admin-Token':token,'Content-Type':'application/json'},body:JSON.stringify(targets)});
+      const data = await response.json();
+      showToast(data.message || data.detail);
+    } finally {
+      button.disabled = false; button.textContent = '发送到所选目标'; refresh();
+    }
+  }
+  function showToast(message){ const toast=document.querySelector('#toast'); toast.textContent=message; toast.style.display='block'; setTimeout(()=>toast.style.display='none',6000); }
+  refresh(); setInterval(refresh, 2000);
+</script>
+</body>
+</html>

@@ -1,0 +1,55 @@
+name: Test, Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  id-token: write
+  contents: write
+  attestations: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install build and test dependencies
+        run: python -m pip install --disable-pip-version-check build -r requirements.txt
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Build Python packages
+        run: python -m build
+
+      - name: Build ready-to-run source archive
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          mkdir -p release/news-forwarder
+          cp -R app tests main.py README.md requirements.txt pyproject.toml MANIFEST.in release/news-forwarder/
+          cp config.example.yaml release/news-forwarder/config.yaml
+          cp .env.example Dockerfile docker-compose.yml start.ps1 start-one-click.ps1 "一键启动.bat" release/news-forwarder/
+          cd release
+          zip -r "../dist/news-forwarder-${RELEASE_TAG}.zip" news-forwarder
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: 'dist/*'
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
