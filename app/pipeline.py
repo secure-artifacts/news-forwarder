@@ -137,8 +137,8 @@ class Pipeline:
                     except Exception as exc:
                         logger.exception("Manual Google Sheets delivery failed")
                         self.database.mark_error([item["id"] for item in pending], str(exc))
-                        errors.append(f"Google Sheets: {exc}")
-                        self._log(None, f"Google Sheets 写入失败：{exc}", "error")
+                        errors.append("Google Sheets 写入失败，请查看服务器日志")
+                        self._log(None, "Google Sheets 写入失败，请查看服务器日志", "error")
 
             if teams:
                 config = self.settings.destinations.get("teams", {})
@@ -157,8 +157,8 @@ class Pipeline:
                     except Exception as exc:
                         logger.exception("Manual Teams delivery failed")
                         self.database.mark_error([item["id"] for item in pending], str(exc))
-                        errors.append(f"Teams: {exc}")
-                        self._log(None, f"Teams 发送失败：{exc}", "error")
+                        errors.append("Teams 发送失败，请查看服务器日志")
+                        self._log(None, "Teams 发送失败，请查看服务器日志", "error")
 
             if errors:
                 return {
@@ -183,8 +183,8 @@ class Pipeline:
             self._log(run_id, f"中文整理完成：{len(translated)}/{len(pending)} 条", "success")
         except Exception as exc:
             logger.exception("Translation failed")
-            errors.append(f"中文翻译: {exc}")
-            self._log(run_id, f"中文整理失败：{exc}", "error")
+            errors.append("中文翻译失败，请查看服务器日志")
+            self._log(run_id, "中文整理失败，请查看服务器日志", "error")
 
     def _deliver(
         self, errors: list[str], translation_required: bool, run_id: int | None = None
