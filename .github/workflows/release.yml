@@ -44,7 +44,7 @@ jobs:
           zip -r "../dist/news-forwarder-${RELEASE_TAG}.zip" news-forwarder
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: 'dist/*'
 
