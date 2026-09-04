@@ -137,6 +137,12 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
                 example = yaml.safe_load(handle) or {}
             if "social_monitor" in example:
                 raw["social_monitor"] = example["social_monitor"]
+    social_monitor = (raw or {}).get("social_monitor", {})
+    if social_monitor and "include_recommended_topics" not in social_monitor:
+        # Upgrade the original three-day profile to the new research-oriented profile.
+        social_monitor["include_recommended_topics"] = True
+        if int(social_monitor.get("max_age_hours", 72)) == 72:
+            social_monitor["max_age_hours"] = 2160
     required = {"app", "destinations", "countries"}
     missing = required.difference(raw or {})
     if missing:

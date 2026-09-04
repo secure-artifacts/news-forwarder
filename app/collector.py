@@ -38,8 +38,11 @@ def clean_text(value: str | None, limit: int = 1200) -> str:
     return SPACE_RE.sub(" ", text).strip()[:limit]
 
 
-def google_news_url(country: dict, search_query: str | None = None) -> str:
-    query = f"({search_query or country['query']}) when:1d"
+def google_news_url(
+    country: dict, search_query: str | None = None, max_age_hours: int = 24
+) -> str:
+    days = max(1, min(365, (max(1, int(max_age_hours)) + 23) // 24))
+    query = f"({search_query or country['query']}) when:{days}d"
     return (
         "https://news.google.com/rss/search"
         f"?q={quote_plus(query)}&hl={quote_plus(country.get('language', 'en-US'))}"
@@ -351,7 +354,9 @@ def parse_feed(content: bytes, country: dict, policy: dict, cutoff: datetime, pr
             continue
         if not source_allowed(url, source_url, source_name, policy):
             continue
-        if not matches_keywords(f"{title} {rss_summary}", country):
+        if not country.get("trust_topic_search", False) and not matches_keywords(
+            f"{title} {rss_summary}", country
+        ):
             continue
         results.append({
             "country_id": country["id"], "country_name": country["name"], "title": title,
@@ -391,13 +396,18 @@ def collect_country(
                 )
             else:
                 label = f"全网关键词组 {positions[priority]}/{totals[priority]}"
-            feeds.append((google_news_url(country, query), priority, label))
+            feeds.append((google_news_url(country, query, max_age_hours), priority, label))
     domains = country.get("preferred_domains", [])
     if domains:
         emit(f"优先网站：{', '.join(domains)}")
     else:
         emit("未设置优先网站，将直接搜索其他国际来源")
-    emit(f"时间范围：最近 {max_age_hours} 小时；目标最多 {limit} 条")
+    age_label = (
+        f"{max_age_hours // 24} 天"
+        if max_age_hours >= 24 and max_age_hours % 24 == 0
+        else f"{max_age_hours} 小时"
+    )
+    emit(f"时间范围：最近 {age_label}；结果按最新发布时间优先；目标最多 {limit} 条")
     general_announced = False
     with httpx.Client(timeout=25, follow_redirects=True, headers={"User-Agent": "NewsForwarder/2.0"}) as client:
         for feed_url, priority, label in feeds:
@@ -460,14 +470,24 @@ def collect_country(
         f"{resolved_count} 条还原为媒体原文链接"
     )
 
-    # Prefer articles whose body can be summarized; within that group, keep configured sites first.
-    prepared.sort(
-        key=lambda item: (
-            0 if item["_has_body"] else 1,
-            item["_priority"],
-            -(parse_date(item.get("published_at")) or cutoff).timestamp(),
+    if country.get("latest_first", False):
+        # Research feeds are explicitly about the most recent platform changes.
+        prepared.sort(
+            key=lambda item: (
+                -(parse_date(item.get("published_at")) or cutoff).timestamp(),
+                item["_priority"],
+                0 if item["_has_body"] else 1,
+            )
         )
-    )
+    else:
+        # News prioritizes articles whose body can produce a useful summary, then configured sites.
+        prepared.sort(
+            key=lambda item: (
+                0 if item["_has_body"] else 1,
+                item["_priority"],
+                -(parse_date(item.get("published_at")) or cutoff).timestamp(),
+            )
+        )
     results: list[dict] = []
     for item in prepared:
         if any(same_story(item["title"], old["title"]) for old in results):

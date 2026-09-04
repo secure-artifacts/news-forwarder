@@ -23,6 +23,7 @@ __pycache__/
 .coverage
 htmlcov/
 build/
+.build-deps/
 dist/
 installer-dist/
 installer-dist-*/

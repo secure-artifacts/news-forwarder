@@ -9,8 +9,15 @@ import threading
 import time
 import webbrowser
 
+# The Windows builder may keep GUI-only dependencies in this isolated local folder.
+_BUILD_DEPS = Path(__file__).resolve().parent / ".build-deps"
+if _BUILD_DEPS.exists():
+    sys.path.insert(0, str(_BUILD_DEPS))
+
 import httpx
 from fastapi.testclient import TestClient
+from PIL import Image
+import pystray
 import uvicorn
 
 from app.settings import load_settings
@@ -46,6 +53,40 @@ def open_when_ready(url: str, no_browser: bool) -> None:
             webbrowser.open(url)
             return
         time.sleep(1)
+
+
+def run_with_tray(app, host: str, port: int, url: str, root: Path) -> None:
+    """Run the web server in the background and keep an explicit Windows exit control."""
+    server = uvicorn.Server(uvicorn.Config(app, host=host, port=port, log_level="info"))
+    icon_path = root / "app" / "static" / "logo.png"
+    icon_image = Image.open(icon_path).convert("RGBA")
+    tray: pystray.Icon | None = None
+
+    def open_dashboard(_icon=None, _item=None) -> None:
+        webbrowser.open(url)
+
+    def quit_application(icon, _item=None) -> None:
+        server.should_exit = True
+        icon.stop()
+
+    menu = pystray.Menu(
+        pystray.MenuItem("打开管理页面", open_dashboard, default=True),
+        pystray.MenuItem("彻底退出", quit_application),
+    )
+    tray = pystray.Icon("InternationalNewsForwarder", icon_image, "国际新闻转发器", menu)
+
+    def serve() -> None:
+        server.run()
+        if tray:
+            tray.stop()
+
+    server_thread = threading.Thread(target=serve, name="news-forwarder-server")
+    server_thread.start()
+    try:
+        tray.run()
+    finally:
+        server.should_exit = True
+        server_thread.join(timeout=20)
 
 
 def main() -> None:
@@ -91,7 +132,7 @@ def main() -> None:
         name="browser-opener",
     )
     opener.start()
-    uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+    run_with_tray(app, args.host, args.port, url, root)
 
 
 if __name__ == "__main__":

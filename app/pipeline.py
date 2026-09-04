@@ -130,6 +130,9 @@ class Pipeline:
                         progress=lambda message, source_name=name: self._log(
                             None, f"[社交/{source_name}] {message}"
                         ),
+                        include_recommended_topics=bool(
+                            config.get("include_recommended_topics", True)
+                        ),
                     )
                     added = sum(self.database.add_social_item(item) for item in items)
                     new_count += added

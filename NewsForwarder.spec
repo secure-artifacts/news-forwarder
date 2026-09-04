@@ -1,9 +1,18 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import os
+import sys
+
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 
-hiddenimports = collect_submodules("googleapiclient") + collect_submodules("uvicorn")
+sys.path.insert(0, os.path.abspath(".build-deps"))
+
+hiddenimports = (
+    collect_submodules("googleapiclient")
+    + collect_submodules("uvicorn")
+    + collect_submodules("pystray")
+)
 datas = [
     ("app/static", "app/static"),
     ("config.example.yaml", "."),
@@ -11,7 +20,7 @@ datas = [
 
 a = Analysis(
     ["launcher.py"],
-    pathex=["."],
+    pathex=[".", ".build-deps"],
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,

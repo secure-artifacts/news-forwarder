@@ -7,6 +7,7 @@ from pathlib import Path
 from app.collector import (
     compact_summary,
     external_url,
+    google_news_url,
     keyword_groups,
     matches_keywords,
     same_story,
@@ -15,6 +16,7 @@ from app.collector import (
 )
 from app.database import Database
 from app.deliveries import TeamsSender
+from app.social import RECOMMENDED_SOCIAL_TOPICS, social_keywords
 from app.settings_api import bounded_int, normalize_domains, normalize_list, normalize_urls, slugify_country
 from app.translator import extract_key_points, translation_instruction
 from app.web import version_tuple
@@ -65,6 +67,21 @@ class SourcePolicyTests(unittest.TestCase):
         self.assertGreater(len(groups), 1)
         queries = search_queries({"query": "Angola", "keywords": keywords, "preferred_domains": []})
         self.assertIn('"topic 39"', " ".join(query for query, _ in queries))
+
+    def test_google_news_query_uses_configured_lookback(self):
+        country = {"query": "Facebook", "language": "en-US", "region": "US", "ceid": "US:en"}
+        self.assertIn("when%3A30d", google_news_url(country, max_age_hours=720))
+        self.assertIn("when%3A1d", google_news_url(country, max_age_hours=12))
+        self.assertIn("when%3A365d", google_news_url(country, max_age_hours=99999))
+
+    def test_social_research_topics_are_added_and_can_be_disabled(self):
+        source = {"keywords": ["Facebook ads", "algorithm update"]}
+        expanded = social_keywords(source)
+        self.assertIn("Reels algorithm", expanded)
+        self.assertIn("advertising policy", expanded)
+        self.assertEqual(expanded.count("algorithm update"), 1)
+        self.assertEqual(social_keywords(source, False), source["keywords"])
+        self.assertGreater(len(RECOMMENDED_SOCIAL_TOPICS), 15)
 
     def test_same_event_deduplicates_similar_headlines(self):
         first = "Angola central bank keeps interest rates unchanged - Reuters"
@@ -182,8 +199,8 @@ class SettingsAndTranslationTests(unittest.TestCase):
         self.assertIn("不要逐字翻译全文", translation_instruction())
 
     def test_version_comparison_handles_release_tags(self):
-        self.assertGreater(version_tuple("v1.3.1"), version_tuple("1.3.0"))
-        self.assertEqual(version_tuple("v1.3.0"), version_tuple("1.3.0"))
+        self.assertGreater(version_tuple("v1.4.1"), version_tuple("1.4.0"))
+        self.assertEqual(version_tuple("v1.4.0"), version_tuple("1.4.0"))
 
 
 if __name__ == "__main__":

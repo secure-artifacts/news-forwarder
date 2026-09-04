@@ -1,5 +1,5 @@
 #define MyAppName "国际新闻转发器"
-#define MyAppVersion "1.3.0"
+#define MyAppVersion "1.4.0"
 #define MyAppPublisher "Secure Artifacts"
 #define MyAppExeName "NewsForwarder.exe"
 
@@ -12,8 +12,8 @@ DefaultDirName={localappdata}\Programs\InternationalNewsForwarder
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
-OutputDir=installer-dist-1.3.0
-OutputBaseFilename=International-News-Forwarder-1.3.0-Setup
+OutputDir=installer-dist-1.4.0
+OutputBaseFilename=International-News-Forwarder-1.4.0-Setup
 Compression=lzma2/ultra64
 SolidCompression=yes
 DiskSpanning=yes

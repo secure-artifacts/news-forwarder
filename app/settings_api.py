@@ -123,10 +123,13 @@ def apply_settings(settings: Settings, payload: dict[str, Any]) -> None:
     settings.raw["social_monitor"] = {
         "enabled": bool(social_payload.get("enabled", False)),
         "interval_minutes": bounded_int(social_payload.get("interval_minutes", 360), 15, 10080),
-        "max_age_hours": bounded_int(social_payload.get("max_age_hours", 72), 1, 720),
+        "max_age_hours": bounded_int(social_payload.get("max_age_hours", 2160), 24, 8760),
         "max_items_per_source": bounded_int(social_payload.get("max_items_per_source", 20), 1, 100),
         "worksheet_name": str(social_payload.get("worksheet_name") or "Social Updates").strip(),
         "automatic_sheets": bool(social_payload.get("automatic_sheets", False)),
+        "include_recommended_topics": bool(
+            social_payload.get("include_recommended_topics", True)
+        ),
         "sources": normalized_sources,
     }
 

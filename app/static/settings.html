@@ -31,14 +31,15 @@
   </section>
 
   <section class="section">
-    <div class="section-head"><div><h2>社交平台动态监测</h2><div class="hint">不限制国家。监测公开网页、搜索结果和您填写的 RSS/Atom；可添加 WhatsApp、Facebook、Instagram、抖音或其他平台。</div></div><button type="button" onclick="addSocialSource()">＋ 添加平台</button></div>
+    <div class="section-head"><div><h2>社交平台动态监测</h2><div class="hint">不限制国家。按最新发布日期搜索公开资料，不要求必须是当天发布；可添加 WhatsApp、Facebook、Instagram、抖音或其他平台。</div></div><button type="button" onclick="addSocialSource()">＋ 添加平台</button></div>
     <div class="check-row">
       <label class="check"><input id="socialEnabled" type="checkbox"> 启用定期监测</label>
       <label class="check"><input id="socialAutoSheets" type="checkbox"> 采集后自动写入独立工作表</label>
+      <label class="check"><input id="socialRecommended" type="checkbox"> 自动加入政策、算法、广告、Reels 和增长运营主题</label>
     </div>
     <div class="grid three" style="margin-bottom:17px">
       <label>更新间隔（分钟）<input id="socialInterval" type="number" min="15" max="10080"></label>
-      <label>资料最大时效（小时）<input id="socialMaxAge" type="number" min="1" max="720"></label>
+      <label>资料回溯天数<input id="socialLookbackDays" type="number" min="1" max="365"><span class="hint">默认 90 天；结果始终按发布日期从新到旧整理，只保留最新资料。</span></label>
       <label>每个平台最多条数<input id="socialMaxItems" type="number" min="1" max="100"></label>
       <label style="grid-column:1/-1">社交动态工作表名称<input id="socialWorksheet" value="Social Updates"><span class="hint">使用同一个 Spreadsheet ID，但写入这个独立工作表，不与新闻混合。</span></label>
     </div>
@@ -119,7 +120,7 @@
       <label>平台显示名称<input data-s="name" value="${esc(s.name||'')}" placeholder="例如 WhatsApp" oninput="this.closest('.country').querySelector('.country-title').textContent=this.value||'新社交平台'"></label>
       <label style="grid-column:span 2">平台/账号搜索词<input data-s="query" value="${esc(s.query||'')}" placeholder="例如 WhatsApp；也可填写 Facebook OR Instagram"></label>
       <label class="check" style="grid-column:1/-1"><input data-s-check="search_enabled" type="checkbox" ${s.search_enabled===false?'':'checked'}> 搜索公开网页和已建立索引的公开贴文</label>
-      <label style="grid-column:1/-1">关注关键词（多个用逗号或换行）<textarea data-s="keywords" placeholder="policy&#10;privacy&#10;terms&#10;feature update">${esc((s.keywords||[]).join('\n'))}</textarea></label>
+      <label style="grid-column:1/-1">自定义关注关键词（多个用逗号或换行）<textarea data-s="keywords" placeholder="Facebook ads&#10;Reels reach&#10;creator monetization">${esc((s.keywords||[]).join('\n'))}</textarea><span class="hint">开启推荐主题后，系统还会自动搜索政策变动、演算法/推荐机制、广告投放、内容经营、互动增长、爆款贴文、Reels 和短视频运营等资料。</span></label>
       <label style="grid-column:1/-1">优先官方网站/域名<textarea data-s="preferred_domains" placeholder="about.fb.com&#10;transparency.meta.com">${esc((s.preferred_domains||[]).join('\n'))}</textarea></label>
       <label style="grid-column:1/-1">公开 RSS/Atom 地址（可填写多个）<textarea data-s="feed_urls" placeholder="https://example.com/updates.xml">${esc((s.feed_urls||[]).join('\n'))}</textarea><span class="hint">适合指定公开账号或网站；需要登录的私人页面不会被抓取。</span></label>
       <label style="grid-column:1/-1">排除关键词<input data-s="exclude_keywords" value="${esc((s.exclude_keywords||[]).join(', '))}" placeholder="rumor, giveaway"></label>
@@ -142,8 +143,9 @@
     document.getElementById('socialSources').innerHTML=(s.sources||[]).map(socialCard).join('');
     document.getElementById('socialEnabled').checked=!!s.enabled;
     document.getElementById('socialAutoSheets').checked=!!s.automatic_sheets;
+    document.getElementById('socialRecommended').checked=s.include_recommended_topics!==false;
     document.getElementById('socialInterval').value=s.interval_minutes||360;
-    document.getElementById('socialMaxAge').value=s.max_age_hours||72;
+    document.getElementById('socialLookbackDays').value=Math.max(1,Math.round((s.max_age_hours||2160)/24));
     document.getElementById('socialMaxItems').value=s.max_items_per_source||20;
     document.getElementById('socialWorksheet').value=s.worksheet_name||'Social Updates';
     document.getElementById('teamsEnabled').checked=d.teams.enabled;
@@ -169,7 +171,7 @@
   function countriesPayload(){ return [...document.querySelectorAll('#countries .country')].map(card=>{ const o={id:card.dataset.countryId||''}; card.querySelectorAll('[data-k]').forEach(i=>o[i.dataset.k]=i.value); return o; }); }
   function socialPayload(){return [...document.querySelectorAll('#socialSources .country')].map(card=>{const o={};card.querySelectorAll('[data-s]').forEach(i=>o[i.dataset.s]=i.value);card.querySelectorAll('[data-s-check]').forEach(i=>o[i.dataset.sCheck]=i.checked);return o})}
   async function saveSettings(){
-    const payload={countries:countriesPayload(),social_monitor:{enabled:checked('socialEnabled'),automatic_sheets:checked('socialAutoSheets'),interval_minutes:+value('socialInterval'),max_age_hours:+value('socialMaxAge'),max_items_per_source:+value('socialMaxItems'),worksheet_name:value('socialWorksheet'),sources:socialPayload()},app:{timezone:value('timezone'),schedule_hour:+value('scheduleHour'),schedule_minute:+value('scheduleMinute'),max_age_hours:+value('maxAgeHours'),max_articles_per_country:+value('maxArticles')},destinations:{automatic_delivery:checked('autoDelivery'),teams:{enabled:checked('teamsEnabled'),payload_mode:value('teamsMode'),max_articles_per_message:8,webhook_url:value('teamsWebhook'),clear_webhook:checked('clearTeamsWebhook')},google_sheets:{enabled:checked('sheetsEnabled'),spreadsheet_id:value('spreadsheetId'),worksheet_name:value('worksheetName'),credentials_path:value('credentialsPath')}},translation:{enabled:checked('translationEnabled'),provider:value('provider'),model:value('model'),api_key:value('apiKey'),clear_api_key:checked('clearApiKey')}};
+    const payload={countries:countriesPayload(),social_monitor:{enabled:checked('socialEnabled'),automatic_sheets:checked('socialAutoSheets'),include_recommended_topics:checked('socialRecommended'),interval_minutes:+value('socialInterval'),max_age_hours:+value('socialLookbackDays')*24,max_items_per_source:+value('socialMaxItems'),worksheet_name:value('socialWorksheet'),sources:socialPayload()},app:{timezone:value('timezone'),schedule_hour:+value('scheduleHour'),schedule_minute:+value('scheduleMinute'),max_age_hours:+value('maxAgeHours'),max_articles_per_country:+value('maxArticles')},destinations:{automatic_delivery:checked('autoDelivery'),teams:{enabled:checked('teamsEnabled'),payload_mode:value('teamsMode'),max_articles_per_message:8,webhook_url:value('teamsWebhook'),clear_webhook:checked('clearTeamsWebhook')},google_sheets:{enabled:checked('sheetsEnabled'),spreadsheet_id:value('spreadsheetId'),worksheet_name:value('worksheetName'),credentials_path:value('credentialsPath')}},translation:{enabled:checked('translationEnabled'),provider:value('provider'),model:value('model'),api_key:value('apiKey'),clear_api_key:checked('clearApiKey')}};
     const button=document.getElementById('saveButton'); button.disabled=true; document.getElementById('message').textContent='正在保存…';
     try{ const response=await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json','X-Admin-Token':token},body:JSON.stringify(payload)}); const data=await response.json(); document.getElementById('message').textContent=data.message||data.detail; if(response.ok)await loadSettings(); }
     catch(e){document.getElementById('message').textContent='保存失败：'+e.message} finally{button.disabled=false}

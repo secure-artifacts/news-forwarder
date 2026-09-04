@@ -25,10 +25,11 @@ destinations:
 social_monitor:
   enabled: true
   interval_minutes: 360
-  max_age_hours: 72
+  max_age_hours: 2160
   max_items_per_source: 20
   worksheet_name: Social Updates
   automatic_sheets: false
+  include_recommended_topics: true
   sources:
   - id: whatsapp
     name: WhatsApp

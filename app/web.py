@@ -200,6 +200,7 @@ def create_app(settings: Settings) -> FastAPI:
         result["config"] = {
             "enabled": bool(settings.social_monitor.get("enabled", False)),
             "interval_minutes": int(settings.social_monitor.get("interval_minutes", 360)),
+            "max_age_hours": int(settings.social_monitor.get("max_age_hours", 2160)),
             "worksheet_name": settings.social_monitor.get("worksheet_name", "Social Updates"),
             "sheets_ready": bool(settings.spreadsheet_id),
             "translation_enabled": bool(settings.raw.get("translation", {}).get("enabled", True)),
