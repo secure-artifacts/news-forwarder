@@ -40,6 +40,7 @@
     .targets label { display:flex; align-items:center; gap:8px; color:var(--text); cursor:pointer; }
     .targets input { accent-color:var(--cyan); width:18px; height:18px; }
     .settings-link { border:1px solid var(--line); border-radius:12px; padding:12px 15px; color:var(--text); }
+    .version-badge{display:inline-flex;align-items:center;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:7px 10px;font-size:12px}.update-button{background:#132943;color:var(--text);box-shadow:none;border:1px solid var(--line);padding:12px 15px}.mini{padding:7px 10px;border-radius:9px;font-size:12px;box-shadow:none;background:#17304a;color:var(--text);border:1px solid var(--line)}.source{display:flex;flex-direction:column;align-items:flex-start;gap:9px}.panel-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
     .log-window { height:310px; overflow:auto; background:#06101d; border:1px solid #172c43; border-radius:12px; padding:8px 0; font-family:"Cascadia Mono",Consolas,"Microsoft YaHei",monospace; }
     .log-line { display:grid; grid-template-columns:82px 72px 1fr; gap:10px; padding:7px 13px; border-bottom:1px solid #11243a; font-size:12px; line-height:1.55; }
     .log-line:last-child { border-bottom:0; }.log-time{color:#6f89a8}.log-level{font-weight:800}.log-message{color:#c9d9ec;word-break:break-word}
@@ -55,6 +56,8 @@
   <header>
     <div class="brand"><img class="app-logo" src="/static/logo.png" alt="国际新闻转发器 Logo"><div><div class="eyebrow">Daily Intelligence Feed</div><h1>国际新闻转发器</h1><p class="sub" id="subtitle">正在读取配置…</p></div></div>
     <div class="actions">
+      <span class="version-badge" id="version">v—</span>
+      <button class="update-button" id="updateButton" onclick="checkUpdate()">检查更新</button>
       <a class="settings-link" href="/social">社交平台动态</a>
       <a class="settings-link" href="/settings">设置</a>
       <button id="runButton" onclick="runNow()">抓取并整理新闻</button>
@@ -78,7 +81,7 @@
     <div class="log-window" id="logs"><div class="empty">还没有运行日志，点击“抓取并整理新闻”开始。</div></div>
   </section>
   <section class="card">
-    <div class="panel-head"><h2>最新新闻</h2><div class="run" id="lastRun"></div></div>
+    <div class="panel-head"><h2>最新新闻</h2><div class="panel-actions"><div class="run" id="lastRun"></div><button class="mini" onclick="copyAllNews()">一键复制全部新闻</button></div></div>
     <div id="articles"><div class="empty">尚无数据，点击“立即抓取”开始。</div></div>
   </section>
 </main>
@@ -86,13 +89,21 @@
 <script>
   let tokenRequired = false;
   let refreshing = false;
+  let currentArticles = [];
   const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+  const dateText=value=>value?new Date(value).toLocaleString('zh-CN',{hour12:false}):'时间未知';
+  const newsCopyText=a=>`【${a.country_name}】${a.title_zh||a.title}\n发布时间：${dateText(a.published_at)}\n内容简介：${a.summary_zh||a.summary||'暂无摘要'}\n来源：${a.source||'未知来源'}\n链接：${a.url}`;
+  async function writeClipboard(text){try{await navigator.clipboard.writeText(text)}catch(e){const t=document.createElement('textarea');t.value=text;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove()}}
+  async function copyArticle(id){const a=currentArticles.find(item=>item.id===id);if(!a)return;await writeClipboard(newsCopyText(a));showToast('已复制该条新闻、摘要和链接')}
+  async function copyAllNews(){const response=await fetch('/api/articles?limit=1000');const data=await response.json();const items=data.items||[];if(!items.length){showToast('没有可复制的新闻');return}await writeClipboard(items.map(newsCopyText).join('\n\n--------------------\n\n'));showToast(`已复制全部 ${items.length} 条新闻`)}
+  async function checkUpdate(){const button=document.querySelector('#updateButton');button.disabled=true;button.textContent='检查中…';try{const data=await fetch('/api/update-check').then(r=>r.json());showToast(data.message);if(data.update_available&&confirm(`${data.message}，是否打开下载页面？`))window.open(data.url,'_blank','noopener')}finally{button.disabled=false;button.textContent='检查更新'}}
   function readyLabel(ok, pending) { return `<span class="${ok ? 'ready':'warn'}">${ok ? (pending ? pending+' 待发送':'已连接') : '未配置'}</span>`; }
   async function refresh(){
     if(refreshing) return; refreshing=true;
     let data;
     try { data = await fetch('/api/status').then(r=>r.json()); } catch(e) { refreshing=false; return; }
     tokenRequired = data.config.token_required;
+    document.querySelector('#version').textContent = `v${data.config.version}`;
     document.querySelector('#subtitle').textContent = `${data.config.countries.join('、')} · 每天 ${data.config.schedule} (${data.config.timezone})`;
     document.querySelector('#total').textContent = data.stats.total || 0;
     document.querySelector('#teams').innerHTML = data.config.teams_enabled ? readyLabel(data.config.teams_ready, data.stats.teams_pending) : '<span class="warn">已停用</span>';
@@ -120,11 +131,12 @@
       return `<div class="log-line log-${esc(item.level)}"><span class="log-time">${esc(time)}</span><span class="log-level">${levels[item.level]||esc(item.level)}</span><span class="log-message">${esc(item.message)}</span></div>`;
     }).join('') : '<div class="empty">还没有运行日志，点击“抓取并整理新闻”开始。</div>';
     if(stickToBottom) logBox.scrollTop=logBox.scrollHeight;
-    document.querySelector('#articles').innerHTML = data.articles.length ? data.articles.map(a => `
+    currentArticles = data.articles || [];
+    document.querySelector('#articles').innerHTML = currentArticles.length ? currentArticles.map(a => `
       <article class="article">
         <div class="country">${esc(a.country_name)}</div>
         <div><h3>${esc(a.title_zh || a.title)}</h3><p>${esc(a.summary_zh || a.summary || '暂无摘要')}</p><div class="badges"><span class="badge">Teams ${a.teams_sent?'✓':'…'}</span><span class="badge">Sheets ${a.sheets_sent?'✓':'…'}</span></div></div>
-        <div class="source"><a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">${esc(a.source)} ↗</a></div>
+        <div class="source"><a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">${esc(a.source)} ↗</a><button class="mini" onclick="copyArticle(${a.id})">复制本条</button></div>
       </article>`).join('') : '<div class="empty">尚无数据，点击“抓取并整理新闻”开始。</div>';
     refreshing=false;
   }

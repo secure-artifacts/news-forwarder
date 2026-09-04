@@ -17,6 +17,7 @@ from app.database import Database
 from app.deliveries import TeamsSender
 from app.settings_api import bounded_int, normalize_domains, normalize_list, normalize_urls, slugify_country
 from app.translator import extract_key_points, translation_instruction
+from app.web import version_tuple
 
 
 class SourcePolicyTests(unittest.TestCase):
@@ -179,6 +180,10 @@ class SettingsAndTranslationTests(unittest.TestCase):
         source = "One. Two. Three. Four should not be included."
         self.assertEqual(extract_key_points(source), "One. Two. Three.")
         self.assertIn("不要逐字翻译全文", translation_instruction())
+
+    def test_version_comparison_handles_release_tags(self):
+        self.assertGreater(version_tuple("v1.3.1"), version_tuple("1.3.0"))
+        self.assertEqual(version_tuple("v1.3.0"), version_tuple("1.3.0"))
 
 
 if __name__ == "__main__":

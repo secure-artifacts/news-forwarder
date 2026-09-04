@@ -3,13 +3,16 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
+import re
 import threading
 from zoneinfo import ZoneInfo
 
+import httpx
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from . import __version__
 from .database import Database
 from .local_model import LocalModelServer
 from .pipeline import Pipeline
@@ -113,7 +116,7 @@ def create_app(settings: Settings) -> FastAPI:
         social_scheduler.shutdown()
         local_model.stop()
 
-    app = FastAPI(title="国际新闻转发器", version="1.2.1", lifespan=lifespan)
+    app = FastAPI(title="国际新闻转发器", version=__version__, lifespan=lifespan)
     app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
     @app.get("/", include_in_schema=False)
@@ -154,8 +157,41 @@ def create_app(settings: Settings) -> FastAPI:
             "translation_provider": settings.raw.get("translation", {}).get("provider", "openai"),
             "token_required": bool(settings.admin_token),
             "social_enabled": bool(settings.social_monitor.get("enabled", False)),
+            "version": __version__,
         }
         return result
+
+    @app.get("/api/articles")
+    def articles(limit: int = 500):
+        return {"items": database.recent_articles(limit)}
+
+    @app.get("/api/update-check")
+    def update_check():
+        release_url = "https://github.com/secure-artifacts/news-forwarder/releases/latest"
+        try:
+            response = httpx.get(
+                "https://api.github.com/repos/secure-artifacts/news-forwarder/releases/latest",
+                timeout=12,
+                follow_redirects=True,
+                headers={"Accept": "application/vnd.github+json", "User-Agent": "NewsForwarder/1.3"},
+            )
+            response.raise_for_status()
+            payload = response.json()
+            latest = str(payload.get("tag_name") or "").lstrip("vV")
+            html_url = str(payload.get("html_url") or release_url)
+            return {
+                "current_version": __version__,
+                "latest_version": latest,
+                "update_available": version_tuple(latest) > version_tuple(__version__),
+                "url": html_url,
+                "message": f"发现新版本 {latest}" if version_tuple(latest) > version_tuple(__version__) else "当前已是最新版本",
+            }
+        except (httpx.HTTPError, ValueError, TypeError):
+            return {
+                "current_version": __version__, "latest_version": "",
+                "update_available": False, "url": release_url,
+                "message": "暂时无法连接 GitHub，请稍后重试",
+            }
 
     @app.get("/api/social/status")
     def social_status():
@@ -168,6 +204,7 @@ def create_app(settings: Settings) -> FastAPI:
             "sheets_ready": bool(settings.spreadsheet_id),
             "translation_enabled": bool(settings.raw.get("translation", {}).get("enabled", True)),
             "token_required": bool(settings.admin_token),
+            "version": __version__,
         }
         return result
 
@@ -242,3 +279,8 @@ def create_app(settings: Settings) -> FastAPI:
 def require_admin(settings: Settings, token: str) -> None:
     if settings.admin_token and token != settings.admin_token:
         raise HTTPException(status_code=401, detail="管理令牌不正确")
+
+
+def version_tuple(value: str) -> tuple[int, ...]:
+    numbers = [int(item) for item in re.findall(r"\d+", value or "")[:4]]
+    return tuple((numbers + [0, 0, 0, 0])[:4])

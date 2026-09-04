@@ -6,6 +6,7 @@ import unicodedata
 from typing import Any
 from urllib.parse import urlparse
 
+from . import __version__
 from .settings import Settings
 
 
@@ -22,6 +23,7 @@ def settings_snapshot(settings: Settings) -> dict[str, Any]:
     translation = settings.raw.get("translation", {})
     destinations = settings.destinations
     return {
+        "version": __version__,
         "countries": settings.countries,
         "social_monitor": settings.social_monitor,
         "app": {

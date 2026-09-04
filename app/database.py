@@ -275,6 +275,14 @@ class Database:
             "logs": [dict(row) for row in reversed(logs)],
         }
 
+    def recent_articles(self, limit: int = 500) -> list[dict[str, Any]]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM articles ORDER BY COALESCE(published_at, collected_at) DESC LIMIT ?",
+                (max(1, min(int(limit), 1000)),),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def social_dashboard(self) -> dict[str, Any]:
         with self.connect() as connection:
             stats = connection.execute(

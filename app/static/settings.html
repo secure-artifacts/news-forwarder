@@ -23,7 +23,7 @@
 </head>
 <body>
 <main>
-  <header><div class="brand"><img class="app-logo" src="/static/logo.png" alt="国际新闻转发器 Logo"><div><h1>设置中心</h1><p class="sub">国家、社交平台、发送渠道与翻译服务统一在这里管理</p></div></div><a class="back" href="/">← 返回主页</a></header>
+  <header><div class="brand"><img class="app-logo" src="/static/logo.png" alt="国际新闻转发器 Logo"><div><h1>设置中心 <span class="status" id="appVersion">v—</span></h1><p class="sub">国家、社交平台、发送渠道与翻译服务统一在这里管理</p></div></div><a class="back" href="/">← 返回主页</a></header>
 
   <section class="section">
     <div class="section-head"><div><h2>国家与地区</h2><div class="hint">只需填写名称和基础搜索词；内部编号由系统自动生成。关键词和网站都支持填写多个。</div></div><button type="button" onclick="addCountry()">＋ 添加国家</button></div>
@@ -135,6 +135,7 @@
     state=await response.json(); render();
   }
   function render(){
+    document.getElementById('appVersion').textContent='v'+(state.version||'—');
     document.getElementById('countries').innerHTML=state.countries.map(countryCard).join('');
     const d=state.destinations,t=state.translation,a=state.app;
     const s=state.social_monitor||{};
