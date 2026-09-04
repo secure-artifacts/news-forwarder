@@ -28,6 +28,8 @@ VersionInfoVersion={#MyAppVersion}
 VersionInfoProductName={#MyAppName}
 VersionInfoDescription=国际新闻与社交平台动态自动收集、中文摘要及转发工具
 SetupLogging=yes
+CloseApplications=force
+RestartApplications=no
 
 [Languages]
 Name: "chinesesimp"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
