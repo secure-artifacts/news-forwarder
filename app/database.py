@@ -29,6 +29,25 @@ CREATE TABLE IF NOT EXISTS articles (
 CREATE INDEX IF NOT EXISTS idx_articles_pending
 ON articles(teams_sent, sheets_sent, collected_at);
 
+CREATE TABLE IF NOT EXISTS social_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fingerprint TEXT NOT NULL UNIQUE,
+    platform_id TEXT NOT NULL,
+    platform_name TEXT NOT NULL,
+    title TEXT NOT NULL,
+    title_zh TEXT NOT NULL DEFAULT '',
+    summary TEXT NOT NULL DEFAULT '',
+    summary_zh TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT '',
+    url TEXT NOT NULL,
+    published_at TEXT,
+    collected_at TEXT NOT NULL,
+    sheets_sent INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_social_items_pending
+ON social_items(sheets_sent, collected_at);
+
 CREATE TABLE IF NOT EXISTS runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     started_at TEXT NOT NULL,
@@ -88,6 +107,28 @@ class Database:
             )
             return cursor.rowcount == 1
 
+    def add_social_item(self, item: dict[str, Any]) -> bool:
+        with self.connect() as connection:
+            recent = connection.execute(
+                """SELECT title, url FROM social_items
+                WHERE platform_id = ? ORDER BY collected_at DESC LIMIT 300""",
+                (item["platform_id"],),
+            ).fetchall()
+            if any(
+                row["url"] == item["url"] or same_story(row["title"], item["title"])
+                for row in recent
+            ):
+                return False
+            cursor = connection.execute(
+                """INSERT OR IGNORE INTO social_items
+                (fingerprint, platform_id, platform_name, title, title_zh, summary, summary_zh,
+                 source, url, published_at, collected_at)
+                VALUES (:fingerprint, :platform_id, :platform_name, :title, :title_zh, :summary,
+                        :summary_zh, :source, :url, :published_at, :collected_at)""",
+                item,
+            )
+            return cursor.rowcount == 1
+
     def pending(
         self, destination: str, limit: int = 200, translated_only: bool = False
     ) -> list[dict[str, Any]]:
@@ -118,6 +159,47 @@ class Database:
                 SET title_zh=:title_zh, summary_zh=:summary_zh, sheets_sent=0
                 WHERE id=:id""",
                 translations,
+            )
+
+    def pending_social_translation(self, limit: int = 100) -> list[dict[str, Any]]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                """SELECT id, platform_id AS country_id, platform_name AS country_name,
+                title, title_zh, summary, summary_zh, source, url, published_at, collected_at
+                FROM social_items WHERE title_zh = '' ORDER BY collected_at ASC LIMIT ?""",
+                (limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def save_social_translations(self, translations: list[dict[str, Any]]) -> None:
+        with self.connect() as connection:
+            connection.executemany(
+                """UPDATE social_items
+                SET title_zh=:title_zh, summary_zh=:summary_zh, sheets_sent=0
+                WHERE id=:id""",
+                translations,
+            )
+
+    def pending_social_sheets(
+        self, limit: int = 300, translated_only: bool = False
+    ) -> list[dict[str, Any]]:
+        translation_clause = " AND title_zh <> ''" if translated_only else ""
+        with self.connect() as connection:
+            rows = connection.execute(
+                f"SELECT * FROM social_items WHERE sheets_sent = 0{translation_clause} "
+                "ORDER BY collected_at ASC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def mark_social_sheets_sent(self, ids: list[int]) -> None:
+        if not ids:
+            return
+        placeholders = ",".join("?" for _ in ids)
+        with self.connect() as connection:
+            connection.execute(
+                f"UPDATE social_items SET sheets_sent=1, last_error='' WHERE id IN ({placeholders})",
+                ids,
             )
 
     def mark_sent(self, destination: str, ids: list[int]) -> None:
@@ -192,3 +274,15 @@ class Database:
             "articles": [dict(row) for row in articles],
             "logs": [dict(row) for row in reversed(logs)],
         }
+
+    def social_dashboard(self) -> dict[str, Any]:
+        with self.connect() as connection:
+            stats = connection.execute(
+                """SELECT COUNT(*) total,
+                SUM(CASE WHEN sheets_sent=0 THEN 1 ELSE 0 END) sheets_pending
+                FROM social_items"""
+            ).fetchone()
+            items = connection.execute(
+                "SELECT * FROM social_items ORDER BY COALESCE(published_at, collected_at) DESC LIMIT 100"
+            ).fetchall()
+        return {"stats": dict(stats), "items": [dict(row) for row in items]}

@@ -7,8 +7,9 @@ from typing import Any
 
 from .collector import collect_country
 from .database import Database
-from .deliveries import GoogleSheetsSender, TeamsSender
+from .deliveries import GoogleSheetsSender, SocialGoogleSheetsSender, TeamsSender
 from .settings import Settings
+from .social import collect_social_source
 from .translator import can_translate, translate_articles
 
 
@@ -105,6 +106,100 @@ class Pipeline:
 
     def send_pending_to_sheets(self) -> dict[str, Any]:
         return self.send_selected(sheets=True, teams=False)
+
+    def run_social(self) -> dict[str, Any]:
+        config = self.settings.social_monitor
+        if not config.get("enabled", False):
+            return {"status": "disabled", "collected": 0, "message": "社交平台监测未启用"}
+        if not self._lock.acquire(blocking=False):
+            return {"status": "already_running", "collected": 0, "message": "其他任务正在运行"}
+        sources = config.get("sources", [])
+        new_count = 0
+        errors: list[str] = []
+        self._log(None, f"社交平台采集开始：共 {len(sources)} 个监测源")
+        try:
+            for source in sources:
+                name = source.get("name", "未命名平台")
+                try:
+                    self._log(None, f"[社交/{name}] 开始采集")
+                    items = collect_social_source(
+                        source,
+                        self.settings.raw.get("source_policy", {}),
+                        int(config.get("max_age_hours", 72)),
+                        int(config.get("max_items_per_source", 20)),
+                        progress=lambda message, source_name=name: self._log(
+                            None, f"[社交/{source_name}] {message}"
+                        ),
+                    )
+                    added = sum(self.database.add_social_item(item) for item in items)
+                    new_count += added
+                    self._log(
+                        None,
+                        f"[社交/{name}] 完成：候选 {len(items)} 条，新增 {added} 条，重复 {len(items)-added} 条",
+                        "success",
+                    )
+                except Exception as exc:
+                    logger.exception("Social collection failed for %s", name)
+                    errors.append(f"{name}: {exc}")
+                    self._log(None, f"[社交/{name}] 采集失败：{exc}", "error")
+            self._translate_social(errors)
+            if config.get("automatic_sheets", False):
+                result = self._send_social_sheets_locked()
+                if result["status"] == "failed":
+                    errors.append(result["message"])
+            status = "partial" if errors else "success"
+            self._log(None, f"社交平台采集完成：新增 {new_count} 条", "warning" if errors else "success")
+            return {"status": status, "collected": new_count, "errors": errors,
+                    "message": f"采集完成，新增 {new_count} 条社交平台动态"}
+        finally:
+            self._lock.release()
+
+    def send_social_to_sheets(self) -> dict[str, Any]:
+        if not self._lock.acquire(blocking=False):
+            return {"status": "already_running", "sent": 0, "message": "其他任务正在运行"}
+        try:
+            errors: list[str] = []
+            self._translate_social(errors)
+            result = self._send_social_sheets_locked()
+            if errors and result["status"] == "success":
+                result["message"] += "；部分中文整理失败"
+            return result
+        finally:
+            self._lock.release()
+
+    def _send_social_sheets_locked(self) -> dict[str, Any]:
+        config = self.settings.social_monitor
+        if not self.settings.spreadsheet_id:
+            return {"status": "failed", "sent": 0, "message": "尚未配置 Google Spreadsheet ID"}
+        translated_only = can_translate(self._translation_config())
+        pending = self.database.pending_social_sheets(translated_only=translated_only)
+        self._log(None, f"社交平台工作表待写入 {len(pending)} 条")
+        try:
+            sender_config = {
+                "enabled": True,
+                "worksheet_name": config.get("worksheet_name", "Social Updates"),
+            }
+            sent = SocialGoogleSheetsSender(self.settings.spreadsheet_id, sender_config).send(pending)
+            self.database.mark_social_sheets_sent(sent)
+            self._log(None, f"社交平台工作表写入完成：{len(sent)} 条", "success")
+            return {"status": "success", "sent": len(sent), "message": f"已写入 {len(sent)} 条社交平台动态"}
+        except Exception:
+            logger.exception("Social Google Sheets delivery failed")
+            self._log(None, "社交平台工作表写入失败，请查看服务器日志", "error")
+            return {"status": "failed", "sent": 0, "message": "写入失败，请查看服务器日志"}
+
+    def _translate_social(self, errors: list[str]) -> None:
+        pending = self.database.pending_social_translation()
+        if not pending:
+            return
+        try:
+            translated = translate_articles(pending, self._social_translation_config())
+            self.database.save_social_translations(translated)
+            self._log(None, f"社交平台中文整理完成：{len(translated)}/{len(pending)} 条", "success")
+        except Exception:
+            logger.exception("Social translation failed")
+            errors.append("社交平台中文整理失败")
+            self._log(None, "社交平台中文整理失败，请查看服务器日志", "error")
 
     def send_selected(self, sheets: bool, teams: bool) -> dict[str, Any]:
         """Send queued articles only to destinations explicitly selected by the user."""
@@ -231,4 +326,17 @@ class Pipeline:
             }
             for item in self.settings.countries
         }
+        return config
+
+    def _social_translation_config(self) -> dict[str, Any]:
+        config = self._translation_config()
+        config["_country_languages"].update(
+            {
+                item["id"]: {
+                    "language": item.get("source_language", "English"),
+                    "code": item.get("source_code", "en"),
+                }
+                for item in self.settings.social_monitor.get("sources", [])
+            }
+        )
         return config

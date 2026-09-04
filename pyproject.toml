@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "international-news-forwarder"
-version = "1.0.2"
+version = "1.2.1"
 description = "Collect, summarize, translate, and forward international news to Google Sheets and Microsoft Teams."
 readme = "README.md"
 requires-python = ">=3.12"

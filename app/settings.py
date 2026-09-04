@@ -62,6 +62,10 @@ class Settings:
         return self.raw["countries"]
 
     @property
+    def social_monitor(self) -> dict[str, Any]:
+        return self.raw.get("social_monitor", {})
+
+    @property
     def database_path(self) -> Path:
         path = Path(self.app["database_path"])
         return path if path.is_absolute() else self.root / path
@@ -126,6 +130,13 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
     load_env_file(path.parent / ".env")
     with path.open("r", encoding="utf-8") as handle:
         raw = yaml.safe_load(handle)
+    if raw is not None and "social_monitor" not in raw:
+        example_path = path.parent / "config.example.yaml"
+        if example_path.exists():
+            with example_path.open("r", encoding="utf-8") as handle:
+                example = yaml.safe_load(handle) or {}
+            if "social_monitor" in example:
+                raw["social_monitor"] = example["social_monitor"]
     required = {"app", "destinations", "countries"}
     missing = required.difference(raw or {})
     if missing:

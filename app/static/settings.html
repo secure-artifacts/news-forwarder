@@ -4,11 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>设置 · 国际新闻转发器</title>
+  <link rel="icon" type="image/png" href="/static/favicon.png">
   <style>
     :root{color-scheme:dark;--bg:#07111f;--panel:#0f1d30;--line:#203650;--text:#edf5ff;--muted:#91a8c4;--cyan:#55d9d2;--orange:#ffb35b;--red:#ff7c7c}
     *{box-sizing:border-box} body{margin:0;font-family:Inter,"Segoe UI","Microsoft YaHei",sans-serif;background:radial-gradient(circle at 20% 0,#133251 0,transparent 38%),var(--bg);color:var(--text)}
     main{width:min(1100px,calc(100% - 32px));margin:auto;padding:38px 0 90px} header{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:26px}
     h1{font-size:clamp(30px,5vw,48px);margin:0;letter-spacing:-.035em}.sub,.hint{color:var(--muted)}.sub{margin:7px 0 0}.back{color:var(--text);text-decoration:none;border:1px solid var(--line);padding:11px 15px;border-radius:12px}
+    .brand{display:flex;align-items:center;gap:15px}.app-logo{width:66px;height:66px;object-fit:contain;filter:drop-shadow(0 8px 18px #00d9ff3d)}
     .section{background:#0f1d30e6;border:1px solid var(--line);border-radius:17px;padding:22px;margin-bottom:18px}.section-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:18px}h2{margin:0;font-size:19px}
     .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}.grid.three{grid-template-columns:repeat(3,1fr)}label{display:block;color:var(--muted);font-size:13px}input,select,textarea{width:100%;margin-top:7px;background:#091728;border:1px solid var(--line);border-radius:10px;color:var(--text);padding:11px 12px;font:inherit;outline:none}input:focus,select:focus,textarea:focus{border-color:var(--cyan)}textarea{min-height:78px;resize:vertical}
     input[type=checkbox]{width:18px;height:18px;margin:0;accent-color:var(--cyan)}.check{display:flex;align-items:center;gap:9px;color:var(--text);font-size:14px}.check-row{display:flex;gap:24px;flex-wrap:wrap;margin-bottom:17px}
@@ -21,11 +23,26 @@
 </head>
 <body>
 <main>
-  <header><div><h1>设置中心</h1><p class="sub">国家、发送渠道与翻译服务统一在这里管理</p></div><a class="back" href="/">← 返回主页</a></header>
+  <header><div class="brand"><img class="app-logo" src="/static/logo.png" alt="国际新闻转发器 Logo"><div><h1>设置中心</h1><p class="sub">国家、社交平台、发送渠道与翻译服务统一在这里管理</p></div></div><a class="back" href="/">← 返回主页</a></header>
 
   <section class="section">
     <div class="section-head"><div><h2>国家与地区</h2><div class="hint">只需填写名称和基础搜索词；内部编号由系统自动生成。关键词和网站都支持填写多个。</div></div><button type="button" onclick="addCountry()">＋ 添加国家</button></div>
     <div id="countries"></div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><div><h2>社交平台动态监测</h2><div class="hint">不限制国家。监测公开网页、搜索结果和您填写的 RSS/Atom；可添加 WhatsApp、Facebook、Instagram、抖音或其他平台。</div></div><button type="button" onclick="addSocialSource()">＋ 添加平台</button></div>
+    <div class="check-row">
+      <label class="check"><input id="socialEnabled" type="checkbox"> 启用定期监测</label>
+      <label class="check"><input id="socialAutoSheets" type="checkbox"> 采集后自动写入独立工作表</label>
+    </div>
+    <div class="grid three" style="margin-bottom:17px">
+      <label>更新间隔（分钟）<input id="socialInterval" type="number" min="15" max="10080"></label>
+      <label>资料最大时效（小时）<input id="socialMaxAge" type="number" min="1" max="720"></label>
+      <label>每个平台最多条数<input id="socialMaxItems" type="number" min="1" max="100"></label>
+      <label style="grid-column:1/-1">社交动态工作表名称<input id="socialWorksheet" value="Social Updates"><span class="hint">使用同一个 Spreadsheet ID，但写入这个独立工作表，不与新闻混合。</span></label>
+    </div>
+    <div id="socialSources"></div>
   </section>
 
   <section class="section">
@@ -97,6 +114,19 @@
       </div></div>`;
   }
   function addCountry(){ document.getElementById('countries').insertAdjacentHTML('beforeend',countryCard()); }
+  function socialCard(s={}){
+    return `<div class="country"><div class="country-head"><span class="country-title">${esc(s.name||'新社交平台')}</span><button type="button" class="danger" onclick="this.closest('.country').remove()">删除</button></div><div class="grid three">
+      <label>平台显示名称<input data-s="name" value="${esc(s.name||'')}" placeholder="例如 WhatsApp" oninput="this.closest('.country').querySelector('.country-title').textContent=this.value||'新社交平台'"></label>
+      <label style="grid-column:span 2">平台/账号搜索词<input data-s="query" value="${esc(s.query||'')}" placeholder="例如 WhatsApp；也可填写 Facebook OR Instagram"></label>
+      <label class="check" style="grid-column:1/-1"><input data-s-check="search_enabled" type="checkbox" ${s.search_enabled===false?'':'checked'}> 搜索公开网页和已建立索引的公开贴文</label>
+      <label style="grid-column:1/-1">关注关键词（多个用逗号或换行）<textarea data-s="keywords" placeholder="policy&#10;privacy&#10;terms&#10;feature update">${esc((s.keywords||[]).join('\n'))}</textarea></label>
+      <label style="grid-column:1/-1">优先官方网站/域名<textarea data-s="preferred_domains" placeholder="about.fb.com&#10;transparency.meta.com">${esc((s.preferred_domains||[]).join('\n'))}</textarea></label>
+      <label style="grid-column:1/-1">公开 RSS/Atom 地址（可填写多个）<textarea data-s="feed_urls" placeholder="https://example.com/updates.xml">${esc((s.feed_urls||[]).join('\n'))}</textarea><span class="hint">适合指定公开账号或网站；需要登录的私人页面不会被抓取。</span></label>
+      <label style="grid-column:1/-1">排除关键词<input data-s="exclude_keywords" value="${esc((s.exclude_keywords||[]).join(', '))}" placeholder="rumor, giveaway"></label>
+      <details style="grid-column:1/-1"><summary style="cursor:pointer;color:var(--muted)">高级语言设置</summary><div class="grid three" style="margin-top:13px"><label>搜索语言<input data-s="language" value="${esc(s.language||'en-US')}"></label><label>搜索地区<input data-s="region" value="${esc(s.region||'US')}"></label><label>CEID<input data-s="ceid" value="${esc(s.ceid||'US:en')}"></label><label>原文语言<input data-s="source_language" value="${esc(s.source_language||'English')}"></label><label>语言代码<input data-s="source_code" value="${esc(s.source_code||'en')}"></label></div></details>
+    </div></div>`;
+  }
+  function addSocialSource(){document.getElementById('socialSources').insertAdjacentHTML('beforeend',socialCard())}
   async function loadSettings(){
     token=localStorage.getItem('news-admin-token')||'';
     let response=await fetch('/api/settings',{headers:{'X-Admin-Token':token}});
@@ -107,6 +137,14 @@
   function render(){
     document.getElementById('countries').innerHTML=state.countries.map(countryCard).join('');
     const d=state.destinations,t=state.translation,a=state.app;
+    const s=state.social_monitor||{};
+    document.getElementById('socialSources').innerHTML=(s.sources||[]).map(socialCard).join('');
+    document.getElementById('socialEnabled').checked=!!s.enabled;
+    document.getElementById('socialAutoSheets').checked=!!s.automatic_sheets;
+    document.getElementById('socialInterval').value=s.interval_minutes||360;
+    document.getElementById('socialMaxAge').value=s.max_age_hours||72;
+    document.getElementById('socialMaxItems').value=s.max_items_per_source||20;
+    document.getElementById('socialWorksheet').value=s.worksheet_name||'Social Updates';
     document.getElementById('teamsEnabled').checked=d.teams.enabled;
     document.getElementById('sheetsEnabled').checked=d.google_sheets.enabled;
     document.getElementById('autoDelivery').checked=d.automatic_delivery;
@@ -127,9 +165,10 @@
     providerChanged(false);
   }
   function providerChanged(reset=true){ const p=value('provider'); if(reset&&state)document.getElementById('model').value=state.provider_defaults[p]; const local=p==='local_llama'; document.getElementById('apiKey').disabled=local; document.getElementById('clearApiKey').disabled=local; }
-  function countriesPayload(){ return [...document.querySelectorAll('.country')].map(card=>{ const o={id:card.dataset.countryId||''}; card.querySelectorAll('[data-k]').forEach(i=>o[i.dataset.k]=i.value); return o; }); }
+  function countriesPayload(){ return [...document.querySelectorAll('#countries .country')].map(card=>{ const o={id:card.dataset.countryId||''}; card.querySelectorAll('[data-k]').forEach(i=>o[i.dataset.k]=i.value); return o; }); }
+  function socialPayload(){return [...document.querySelectorAll('#socialSources .country')].map(card=>{const o={};card.querySelectorAll('[data-s]').forEach(i=>o[i.dataset.s]=i.value);card.querySelectorAll('[data-s-check]').forEach(i=>o[i.dataset.sCheck]=i.checked);return o})}
   async function saveSettings(){
-    const payload={countries:countriesPayload(),app:{timezone:value('timezone'),schedule_hour:+value('scheduleHour'),schedule_minute:+value('scheduleMinute'),max_age_hours:+value('maxAgeHours'),max_articles_per_country:+value('maxArticles')},destinations:{automatic_delivery:checked('autoDelivery'),teams:{enabled:checked('teamsEnabled'),payload_mode:value('teamsMode'),max_articles_per_message:8,webhook_url:value('teamsWebhook'),clear_webhook:checked('clearTeamsWebhook')},google_sheets:{enabled:checked('sheetsEnabled'),spreadsheet_id:value('spreadsheetId'),worksheet_name:value('worksheetName'),credentials_path:value('credentialsPath')}},translation:{enabled:checked('translationEnabled'),provider:value('provider'),model:value('model'),api_key:value('apiKey'),clear_api_key:checked('clearApiKey')}};
+    const payload={countries:countriesPayload(),social_monitor:{enabled:checked('socialEnabled'),automatic_sheets:checked('socialAutoSheets'),interval_minutes:+value('socialInterval'),max_age_hours:+value('socialMaxAge'),max_items_per_source:+value('socialMaxItems'),worksheet_name:value('socialWorksheet'),sources:socialPayload()},app:{timezone:value('timezone'),schedule_hour:+value('scheduleHour'),schedule_minute:+value('scheduleMinute'),max_age_hours:+value('maxAgeHours'),max_articles_per_country:+value('maxArticles')},destinations:{automatic_delivery:checked('autoDelivery'),teams:{enabled:checked('teamsEnabled'),payload_mode:value('teamsMode'),max_articles_per_message:8,webhook_url:value('teamsWebhook'),clear_webhook:checked('clearTeamsWebhook')},google_sheets:{enabled:checked('sheetsEnabled'),spreadsheet_id:value('spreadsheetId'),worksheet_name:value('worksheetName'),credentials_path:value('credentialsPath')}},translation:{enabled:checked('translationEnabled'),provider:value('provider'),model:value('model'),api_key:value('apiKey'),clear_api_key:checked('clearApiKey')}};
     const button=document.getElementById('saveButton'); button.disabled=true; document.getElementById('message').textContent='正在保存…';
     try{ const response=await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json','X-Admin-Token':token},body:JSON.stringify(payload)}); const data=await response.json(); document.getElementById('message').textContent=data.message||data.detail; if(response.ok)await loadSettings(); }
     catch(e){document.getElementById('message').textContent='保存失败：'+e.message} finally{button.disabled=false}

@@ -1,5 +1,7 @@
 # 国际新闻自动收集与转发器
 
+1.2.0 增加独立的“社交平台动态”板块，可定期监测公开的 WhatsApp、Facebook、Instagram、抖音/TikTok 及其他平台政策和资料更新。社交动态支持中文重点摘要、相似内容去重、单条/全部复制，并写入独立的 Google Sheets 工作表。
+
 每天自动收集指定国家的国际新闻，过滤中国域名和指定来源，翻译成简体中文，然后：
 
 - 发送到 Microsoft Teams 频道或聊天；
@@ -167,3 +169,13 @@ docker compose up -d --build
 仓库只保存示例配置。首次从源码运行时，请复制 `config.example.yaml` 为 `config.yaml`，并复制 `.env.example` 为 `.env`。真实的 Google 服务账号、Webhook、API 密钥、数据库、日志、本地模型和运行时文件不会进入 Git 或发布包。
 
 推送 `v*` 标签会运行测试、构建 Python 包和可直接运行的源码 ZIP，然后由 GitHub Actions 创建带构建来源证明（Attestation）的 Release。CodeQL 与 Dependabot 配置也已包含在仓库中。
+
+## 11. Windows 离线安装包
+
+离线安装版内置 Python、应用依赖、本地翻译运行组件和 TranslateGemma 模型。安装完成后会创建桌面和开始菜单快捷方式，用户无需安装 Python 或下载模型。安装包不会包含开发者自己的 `.env`、Google 服务账号、新闻数据库或日志。
+
+构建命令：
+
+```powershell
+.\build-installer.ps1
+```

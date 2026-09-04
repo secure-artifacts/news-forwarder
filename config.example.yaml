@@ -22,6 +22,74 @@ destinations:
   google_sheets:
     enabled: true
     worksheet_name: News
+social_monitor:
+  enabled: true
+  interval_minutes: 360
+  max_age_hours: 72
+  max_items_per_source: 20
+  worksheet_name: Social Updates
+  automatic_sheets: false
+  sources:
+  - id: whatsapp
+    name: WhatsApp
+    query: WhatsApp
+    search_enabled: true
+    keywords:
+    - policy
+    - privacy
+    - terms
+    - security update
+    - feature update
+    exclude_keywords: []
+    preferred_domains:
+    - whatsapp.com
+    - about.fb.com
+    feed_urls: []
+    language: en-US
+    region: US
+    ceid: US:en
+    source_language: English
+    source_code: en
+  - id: meta-social
+    name: Facebook / Instagram
+    query: Facebook OR Instagram OR Meta
+    search_enabled: true
+    keywords:
+    - policy
+    - privacy
+    - terms
+    - safety
+    - product update
+    exclude_keywords: []
+    preferred_domains:
+    - about.fb.com
+    - transparency.meta.com
+    feed_urls: []
+    language: en-US
+    region: US
+    ceid: US:en
+    source_language: English
+    source_code: en
+  - id: douyin-tiktok
+    name: 抖音 / TikTok
+    query: Douyin OR TikTok
+    search_enabled: true
+    keywords:
+    - policy
+    - privacy
+    - terms
+    - regulation
+    - product update
+    exclude_keywords: []
+    preferred_domains:
+    - newsroom.tiktok.com
+    - tiktok.com
+    feed_urls: []
+    language: en-US
+    region: US
+    ceid: US:en
+    source_language: English
+    source_code: en
 source_policy:
   require_https: true
   allowed_domains: []

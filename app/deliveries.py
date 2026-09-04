@@ -20,6 +20,17 @@ SHEET_HEADERS = [
     "原文链接",
 ]
 
+SOCIAL_SHEET_HEADERS = [
+    "采集时间",
+    "贴文/发布时间",
+    "平台",
+    "中文标题",
+    "中文内容简介",
+    "原文标题",
+    "来源账号/网站",
+    "原文链接",
+]
+
 
 def chunks(items: list[dict[str, Any]], size: int):
     for start in range(0, len(items), size):
@@ -175,3 +186,52 @@ class GoogleSheetsSender:
                 spreadsheetId=self.spreadsheet_id,
                 body={"requests": [{"addSheet": {"properties": {"title": title}}}]},
             ).execute()
+
+
+class SocialGoogleSheetsSender(GoogleSheetsSender):
+    def send(self, items: list[dict[str, Any]]) -> list[int]:
+        if not self.spreadsheet_id or not self.config.get("enabled", True) or not items:
+            return []
+        credentials, _ = google.auth.default(
+            scopes=["https://www.googleapis.com/auth/spreadsheets"]
+        )
+        service = build("sheets", "v4", credentials=credentials, cache_discovery=False)
+        title = self.config.get("worksheet_name", "Social Updates")
+        self._ensure_sheet(service, title)
+        escaped_title = title.replace("'", "''")
+        range_name = f"'{escaped_title}'!A:H"
+        current = (
+            service.spreadsheets().values()
+            .get(spreadsheetId=self.spreadsheet_id, range=range_name)
+            .execute().get("values", [])
+        )
+        rows: list[list[str]] = []
+        if not current:
+            rows.append(SOCIAL_SHEET_HEADERS)
+        existing_by_url = {
+            row[7]: index for index, row in enumerate(current, start=1) if len(row) > 7 and row[7]
+        }
+        append_rows: list[list[str]] = []
+        for item in items:
+            row = [
+                item["collected_at"], item["published_at"] or "", item["platform_name"],
+                item["title_zh"] or item["title"], item["summary_zh"] or item["summary"],
+                item["title"], item["source"], item["url"],
+            ]
+            existing_row = existing_by_url.get(item["url"])
+            if existing_row:
+                service.spreadsheets().values().update(
+                    spreadsheetId=self.spreadsheet_id,
+                    range=f"'{escaped_title}'!A{existing_row}:H{existing_row}",
+                    valueInputOption="RAW", body={"values": [row]},
+                ).execute()
+            else:
+                append_rows.append(row)
+        rows.extend(append_rows)
+        if rows:
+            service.spreadsheets().values().append(
+                spreadsheetId=self.spreadsheet_id, range=range_name,
+                valueInputOption="RAW", insertDataOption="INSERT_ROWS",
+                body={"values": rows},
+            ).execute()
+        return [item["id"] for item in items]

@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from .database import Database
 from .local_model import LocalModelServer
@@ -54,6 +55,38 @@ class DailyScheduler:
                 self.job()
 
 
+class IntervalScheduler:
+    def __init__(self, job, interval_minutes: int, enabled: bool):
+        self.job = job
+        self.interval_minutes = interval_minutes
+        self.enabled = enabled
+        self.stop_event = threading.Event()
+        self.wake_event = threading.Event()
+        self.thread = threading.Thread(target=self._loop, daemon=True, name="social-monitor")
+
+    def start(self):
+        self.thread.start()
+
+    def shutdown(self):
+        self.stop_event.set()
+        self.wake_event.set()
+
+    def configure(self, interval_minutes: int, enabled: bool):
+        self.interval_minutes = interval_minutes
+        self.enabled = enabled
+        self.wake_event.set()
+
+    def _loop(self):
+        while not self.stop_event.is_set():
+            timeout = max(15, self.interval_minutes) * 60 if self.enabled else 86400
+            woke_early = self.wake_event.wait(timeout)
+            self.wake_event.clear()
+            if self.stop_event.is_set():
+                return
+            if not woke_early and self.enabled:
+                self.job()
+
+
 def create_app(settings: Settings) -> FastAPI:
     database = Database(settings.database_path)
     pipeline = Pipeline(settings, database)
@@ -64,16 +97,24 @@ def create_app(settings: Settings) -> FastAPI:
         int(settings.app.get("schedule_minute", 0)),
         settings.app.get("timezone", "UTC"),
     )
+    social_scheduler = IntervalScheduler(
+        pipeline.run_social,
+        int(settings.social_monitor.get("interval_minutes", 360)),
+        bool(settings.social_monitor.get("enabled", False)),
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         local_model.start()
         scheduler.start()
+        social_scheduler.start()
         yield
         scheduler.shutdown()
+        social_scheduler.shutdown()
         local_model.stop()
 
-    app = FastAPI(title="国际新闻转发器", version="1.0.2", lifespan=lifespan)
+    app = FastAPI(title="国际新闻转发器", version="1.2.1", lifespan=lifespan)
+    app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
     @app.get("/", include_in_schema=False)
     def index():
@@ -82,6 +123,10 @@ def create_app(settings: Settings) -> FastAPI:
     @app.get("/settings", include_in_schema=False)
     def settings_page():
         return FileResponse(Path(__file__).parent / "static" / "settings.html")
+
+    @app.get("/social", include_in_schema=False)
+    def social_page():
+        return FileResponse(Path(__file__).parent / "static" / "social.html")
 
     @app.get("/api/status")
     def status():
@@ -107,6 +152,21 @@ def create_app(settings: Settings) -> FastAPI:
             ),
             "translation_ready": translation_ready,
             "translation_provider": settings.raw.get("translation", {}).get("provider", "openai"),
+            "token_required": bool(settings.admin_token),
+            "social_enabled": bool(settings.social_monitor.get("enabled", False)),
+        }
+        return result
+
+    @app.get("/api/social/status")
+    def social_status():
+        result = database.social_dashboard()
+        result["running"] = pipeline.running
+        result["config"] = {
+            "enabled": bool(settings.social_monitor.get("enabled", False)),
+            "interval_minutes": int(settings.social_monitor.get("interval_minutes", 360)),
+            "worksheet_name": settings.social_monitor.get("worksheet_name", "Social Updates"),
+            "sheets_ready": bool(settings.spreadsheet_id),
+            "translation_enabled": bool(settings.raw.get("translation", {}).get("enabled", True)),
             "token_required": bool(settings.admin_token),
         }
         return result
@@ -134,6 +194,10 @@ def create_app(settings: Settings) -> FastAPI:
                 int(settings.app.get("schedule_minute", 0)),
                 settings.app.get("timezone", "UTC"),
             )
+            social_scheduler.configure(
+                int(settings.social_monitor.get("interval_minutes", 360)),
+                bool(settings.social_monitor.get("enabled", False)),
+            )
             return {"saved": True, "message": "设置已保存并立即生效"}
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -145,6 +209,19 @@ def create_app(settings: Settings) -> FastAPI:
             return {"accepted": False, "message": "抓取任务正在运行"}
         background_tasks.add_task(pipeline.run)
         return {"accepted": True, "message": "抓取任务已启动"}
+
+    @app.post("/api/social/run", status_code=202)
+    def run_social(background_tasks: BackgroundTasks, x_admin_token: str = Header(default="")):
+        require_admin(settings, x_admin_token)
+        if pipeline.running:
+            return {"accepted": False, "message": "其他抓取任务正在运行"}
+        background_tasks.add_task(pipeline.run_social)
+        return {"accepted": True, "message": "社交平台采集任务已启动"}
+
+    @app.post("/api/social/send-sheets")
+    def send_social_sheets(x_admin_token: str = Header(default="")):
+        require_admin(settings, x_admin_token)
+        return pipeline.send_social_to_sheets()
 
     @app.post("/api/send-sheets")
     def send_sheets(x_admin_token: str = Header(default="")):

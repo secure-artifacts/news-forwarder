@@ -15,7 +15,7 @@ from app.collector import (
 )
 from app.database import Database
 from app.deliveries import TeamsSender
-from app.settings_api import bounded_int, normalize_domains, normalize_list, slugify_country
+from app.settings_api import bounded_int, normalize_domains, normalize_list, normalize_urls, slugify_country
 from app.translator import extract_key_points, translation_instruction
 
 
@@ -120,6 +120,23 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual(logs[-1]["message"], "开始搜索优先网站")
             self.assertEqual(logs[-1]["run_id"], run_id)
 
+    def test_social_items_are_separate_and_deduplicated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            database = Database(Path(tmp) / "news.db")
+            item = {
+                "fingerprint": "social-1", "platform_id": "whatsapp",
+                "platform_name": "WhatsApp", "title": "WhatsApp updates privacy policy",
+                "title_zh": "", "summary": "Policy details", "summary_zh": "",
+                "source": "WhatsApp", "url": "https://www.whatsapp.com/legal/update",
+                "published_at": "2026-09-01T10:00:00+00:00",
+                "collected_at": "2026-09-01T11:00:00+00:00",
+            }
+            self.assertTrue(database.add_social_item(item))
+            self.assertFalse(database.add_social_item(item))
+            dashboard = database.social_dashboard()
+            self.assertEqual(dashboard["stats"]["total"], 1)
+            self.assertEqual(dashboard["items"][0]["platform_name"], "WhatsApp")
+
 
 class TeamsTests(unittest.TestCase):
     def test_adaptive_card_contains_chinese_and_link(self):
@@ -151,6 +168,12 @@ class SettingsAndTranslationTests(unittest.TestCase):
         self.assertEqual(bounded_int("23", 0, 23), 23)
         with self.assertRaises(ValueError):
             bounded_int(24, 0, 23)
+
+    def test_social_feed_urls_only_accept_https(self):
+        self.assertEqual(
+            normalize_urls("https://example.com/feed.xml, http://unsafe.test/feed"),
+            ["https://example.com/feed.xml"],
+        )
 
     def test_translation_uses_only_a_compact_source_excerpt(self):
         source = "One. Two. Three. Four should not be included."

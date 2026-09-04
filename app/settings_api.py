@@ -23,6 +23,7 @@ def settings_snapshot(settings: Settings) -> dict[str, Any]:
     destinations = settings.destinations
     return {
         "countries": settings.countries,
+        "social_monitor": settings.social_monitor,
         "app": {
             "timezone": settings.app.get("timezone", "Europe/Lisbon"),
             "schedule_hour": int(settings.app.get("schedule_hour", 8)),
@@ -84,6 +85,48 @@ def apply_settings(settings: Settings, payload: dict[str, Any]) -> None:
             }
         )
     settings.raw["countries"] = normalized_countries
+
+    social_payload = payload.get("social_monitor", settings.social_monitor)
+    if not isinstance(social_payload, dict):
+        raise ValueError("社交平台监测设置格式不正确")
+    normalized_sources: list[dict[str, Any]] = []
+    social_seen: set[str] = set()
+    for index, item in enumerate(social_payload.get("sources", []), start=1):
+        name = str(item.get("name") or "").strip()
+        query = str(item.get("query") or name).strip()
+        if not name or not query:
+            raise ValueError(f"第 {index} 个社交平台必须填写名称和搜索词")
+        source_id = slugify_country(query, name)
+        source_id = unique_country_id(source_id, social_seen)
+        social_seen.add(source_id)
+        normalized_sources.append(
+            {
+                "id": source_id,
+                "name": name,
+                "query": query,
+                "search_enabled": bool(item.get("search_enabled", True)),
+                "keywords": normalize_list(item.get("keywords")),
+                "exclude_keywords": normalize_list(item.get("exclude_keywords")),
+                "preferred_domains": normalize_domains(item.get("preferred_domains")),
+                "feed_urls": normalize_urls(item.get("feed_urls")),
+                "language": str(item.get("language") or "en-US").strip(),
+                "region": str(item.get("region") or "US").strip().upper(),
+                "ceid": str(item.get("ceid") or "US:en").strip(),
+                "source_language": str(item.get("source_language") or "English").strip(),
+                "source_code": str(item.get("source_code") or "en").strip(),
+            }
+        )
+    if bool(social_payload.get("enabled", False)) and not normalized_sources:
+        raise ValueError("启用社交平台监测时，请至少添加一个平台")
+    settings.raw["social_monitor"] = {
+        "enabled": bool(social_payload.get("enabled", False)),
+        "interval_minutes": bounded_int(social_payload.get("interval_minutes", 360), 15, 10080),
+        "max_age_hours": bounded_int(social_payload.get("max_age_hours", 72), 1, 720),
+        "max_items_per_source": bounded_int(social_payload.get("max_items_per_source", 20), 1, 100),
+        "worksheet_name": str(social_payload.get("worksheet_name") or "Social Updates").strip(),
+        "automatic_sheets": bool(social_payload.get("automatic_sheets", False)),
+        "sources": normalized_sources,
+    }
 
     app_payload = payload.get("app", {})
     settings.app.update(
@@ -202,6 +245,15 @@ def normalize_domains(value: Any) -> list[str]:
         if host and re.fullmatch(r"[a-z0-9.-]+", host) and host not in domains:
             domains.append(host)
     return domains
+
+
+def normalize_urls(value: Any) -> list[str]:
+    urls: list[str] = []
+    for item in normalize_list(value):
+        parsed = urlparse(item.strip())
+        if parsed.scheme == "https" and parsed.hostname and item not in urls:
+            urls.append(item)
+    return urls
 
 
 def bounded_int(value: Any, minimum: int, maximum: int) -> int:

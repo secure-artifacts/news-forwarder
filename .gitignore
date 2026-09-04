@@ -24,6 +24,10 @@ __pycache__/
 htmlcov/
 build/
 dist/
+installer-dist/
+installer-dist-*/
+*.7z
+tools/
 *.egg-info/
 
 # Editors and operating systems
