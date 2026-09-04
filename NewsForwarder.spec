@@ -11,7 +11,6 @@ sys.path.insert(0, os.path.abspath(".build-deps"))
 hiddenimports = (
     collect_submodules("googleapiclient")
     + collect_submodules("uvicorn")
-    + collect_submodules("pystray")
 )
 datas = [
     ("app/static", "app/static"),
