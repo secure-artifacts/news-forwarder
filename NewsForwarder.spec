@@ -26,7 +26,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["pytest", "setuptools", "wheel"],
+    excludes=["pytest", "setuptools", "wheel", "multipart", "python_multipart"],
     noarchive=False,
     optimize=1,
 )

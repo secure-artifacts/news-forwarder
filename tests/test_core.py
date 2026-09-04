@@ -199,8 +199,8 @@ class SettingsAndTranslationTests(unittest.TestCase):
         self.assertIn("不要逐字翻译全文", translation_instruction())
 
     def test_version_comparison_handles_release_tags(self):
-        self.assertGreater(version_tuple("v1.4.1"), version_tuple("1.4.0"))
-        self.assertEqual(version_tuple("v1.4.0"), version_tuple("1.4.0"))
+        self.assertGreater(version_tuple("v1.4.2"), version_tuple("1.4.1"))
+        self.assertEqual(version_tuple("v1.4.1"), version_tuple("1.4.1"))
 
 
 if __name__ == "__main__":

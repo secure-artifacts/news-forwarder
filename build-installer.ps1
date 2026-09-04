@@ -19,4 +19,4 @@ if (-not (Test-Path -LiteralPath $InnoCompiler)) {
 & $InnoCompiler installer.iss
 if ($LASTEXITCODE -ne 0) { throw 'Inno Setup 构建失败' }
 
-Write-Host "安装程序已生成：$ProjectDir\installer-dist-1.4.0" -ForegroundColor Green
+Write-Host "安装程序已生成：$ProjectDir\installer-dist-1.4.1" -ForegroundColor Green
