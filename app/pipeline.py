@@ -26,7 +26,7 @@ class Pipeline:
     def running(self) -> bool:
         return self._lock.locked()
 
-    def run(self) -> dict[str, Any]:
+    def run(self, automatic_delivery: bool | None = None) -> dict[str, Any]:
         if not self._lock.acquire(blocking=False):
             return {"status": "already_running", "collected": 0}
         started = datetime.now(timezone.utc).isoformat()
@@ -70,7 +70,11 @@ class Pipeline:
 
             self._translate(errors, run_id)
             translation_required = can_translate(self._translation_config())
-            if self.settings.destinations.get("automatic_delivery", False):
+            should_deliver = (
+                self.settings.destinations.get("automatic_delivery", False)
+                if automatic_delivery is None else automatic_delivery
+            )
+            if should_deliver:
                 self._log(run_id, "已启用自动发送，开始写入已启用渠道")
                 self._deliver(errors, translation_required, run_id)
             else:
@@ -107,9 +111,11 @@ class Pipeline:
     def send_pending_to_sheets(self) -> dict[str, Any]:
         return self.send_selected(sheets=True, teams=False)
 
-    def run_social(self) -> dict[str, Any]:
+    def run_social(
+        self, automatic_sheets: bool | None = None, require_enabled: bool = True
+    ) -> dict[str, Any]:
         config = self.settings.social_monitor
-        if not config.get("enabled", False):
+        if require_enabled and not config.get("enabled", False):
             return {"status": "disabled", "collected": 0, "message": "社交平台监测未启用"}
         if not self._lock.acquire(blocking=False):
             return {"status": "already_running", "collected": 0, "message": "其他任务正在运行"}
@@ -146,7 +152,11 @@ class Pipeline:
                     errors.append(f"{name}: {exc}")
                     self._log(None, f"[社交/{name}] 采集失败：{exc}", "error")
             self._translate_social(errors)
-            if config.get("automatic_sheets", False):
+            should_send = (
+                config.get("automatic_sheets", False)
+                if automatic_sheets is None else automatic_sheets
+            )
+            if should_send:
                 result = self._send_social_sheets_locked()
                 if result["status"] == "failed":
                     errors.append(result["message"])
@@ -156,6 +166,43 @@ class Pipeline:
                     "message": f"采集完成，新增 {new_count} 条社交平台动态"}
         finally:
             self._lock.release()
+
+    def run_combined(
+        self, news: bool, social: bool, sheets: bool, teams: bool
+    ) -> dict[str, Any]:
+        """Collect selected content and immediately deliver only to checked targets."""
+        if not news and not social:
+            return {"status": "invalid", "message": "请至少选择新闻或社交平台动态"}
+        self._log(None, "一体化任务启动：" + "、".join(
+            name for enabled, name in ((news, "新闻"), (social, "社交平台动态")) if enabled
+        ))
+        collected = 0
+        sent = 0
+        statuses: list[str] = []
+        if news:
+            news_result = self.run(automatic_delivery=False)
+            collected += int(news_result.get("collected", 0))
+            statuses.append(str(news_result.get("status", "failed")))
+            if sheets or teams:
+                delivery = self.send_selected(sheets=sheets, teams=teams)
+                sent += int(delivery.get("sent", 0))
+                statuses.append(str(delivery.get("status", "failed")))
+        if social:
+            social_result = self.run_social(automatic_sheets=False, require_enabled=False)
+            collected += int(social_result.get("collected", 0))
+            statuses.append(str(social_result.get("status", "failed")))
+            if sheets:
+                delivery = self.send_social_to_sheets()
+                sent += int(delivery.get("sent", 0))
+                statuses.append(str(delivery.get("status", "failed")))
+        failed = any(status in {"failed", "invalid"} for status in statuses)
+        partial = failed or any(status == "partial" for status in statuses)
+        status = "partial" if partial else "success"
+        message = f"所选任务完成：新增 {collected} 条，写入/发送 {sent} 条"
+        if not sheets and not teams:
+            message += "；未勾选发送目标，仅保存到软件"
+        self._log(None, message, "warning" if partial else "success")
+        return {"status": status, "collected": collected, "sent": sent, "message": message}
 
     def send_social_to_sheets(self) -> dict[str, Any]:
         if not self._lock.acquire(blocking=False):
@@ -322,6 +369,7 @@ class Pipeline:
     def _translation_config(self) -> dict[str, Any]:
         config = dict(self.settings.raw.get("translation", {}))
         config["_api_key"] = self.settings.translation_api_key
+        config["_api_keys"] = self.settings.translation_api_keys
         config["_country_languages"] = {
             item["id"]: {
                 "language": item.get("source_language", config.get("source_language", "Portuguese")),

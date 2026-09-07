@@ -36,6 +36,7 @@
     .badge { border:1px solid var(--line); border-radius:999px; color:var(--muted); font-size:11px; padding:3px 7px; }
     .empty { color:var(--muted); text-align:center; padding:50px 0; }
     .dispatch { display:flex; align-items:center; justify-content:space-between; gap:18px; margin-bottom:22px; }
+    .workflow-options{display:flex;gap:34px;flex-wrap:wrap}.option-group{min-width:220px}.option-note{color:var(--muted);font-size:11px;margin-top:7px}
     .targets { display:flex; gap:20px; flex-wrap:wrap; margin-top:10px; }
     .targets label { display:flex; align-items:center; gap:8px; color:var(--text); cursor:pointer; }
     .targets input { accent-color:var(--cyan); width:18px; height:18px; }
@@ -46,6 +47,7 @@
     .log-line:last-child { border-bottom:0; }.log-time{color:#6f89a8}.log-level{font-weight:800}.log-message{color:#c9d9ec;word-break:break-word}
     .log-info .log-level{color:#73b8e8}.log-success .log-level{color:var(--cyan)}.log-warning .log-level{color:var(--orange)}.log-error .log-level{color:#ff8585}
     .live { display:inline-flex;align-items:center;gap:7px;color:var(--muted) }.live.running{color:var(--cyan)}.live.running::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--cyan);box-shadow:0 0 0 5px #55d9d21b;animation:pulse 1.2s infinite}
+    .tabs{display:flex;gap:7px}.tab{background:transparent;color:var(--muted);box-shadow:none;border:1px solid var(--line);padding:9px 13px}.tab.active{background:#173b4b;color:var(--cyan);border-color:#327a7a}.published{color:#6f89a8;font-size:12px;margin-top:6px}
     @keyframes pulse{50%{opacity:.35}}.log-note{color:var(--muted);font-size:12px}
     #toast { position:fixed; right:20px; bottom:20px; background:#172b42; border:1px solid var(--line); border-radius:12px; padding:13px 18px; display:none; }
     @media(max-width:800px){ header{align-items:flex-start;flex-direction:column}.brand{align-items:flex-start}.app-logo{width:58px;height:58px}.grid{grid-template-columns:repeat(2,1fr)}.article{grid-template-columns:1fr}.source{text-align:left} }
@@ -58,9 +60,7 @@
     <div class="actions">
       <span class="version-badge" id="version">v—</span>
       <button class="update-button" id="updateButton" onclick="checkUpdate()">检查更新</button>
-      <a class="settings-link" href="/social">社交平台动态</a>
       <a class="settings-link" href="/settings">设置</a>
-      <button id="runButton" onclick="runNow()">抓取并整理新闻</button>
     </div>
   </header>
   <section class="grid">
@@ -70,18 +70,24 @@
     <div class="card"><div class="label">中文翻译</div><div class="value" id="translation">—</div></div>
   </section>
   <section class="card dispatch">
-    <div><div class="label">发送目标</div><div class="targets">
-      <label><input type="checkbox" id="targetSheets"> Google Sheets</label>
-      <label><input type="checkbox" id="targetTeams"> Microsoft Teams</label>
-    </div></div>
-    <button class="secondary" id="sendButton" onclick="sendSelected()">发送到所选目标</button>
+    <div class="workflow-options">
+      <div class="option-group"><div class="label">抓取内容</div><div class="targets">
+        <label><input type="checkbox" id="collectNews" checked> 新闻</label>
+        <label><input type="checkbox" id="collectSocial" checked> 社交平台动态</label>
+      </div></div>
+      <div class="option-group"><div class="label">整理后执行</div><div class="targets">
+        <label><input type="checkbox" id="targetSheets"> 写入 Google Sheets</label>
+        <label><input type="checkbox" id="targetTeams"> 发送 Microsoft Teams</label>
+      </div><div class="option-note">未勾选的渠道不会写入；Teams 仅发送新闻，社交动态写入独立 Sheet。</div></div>
+    </div>
+    <button class="secondary" id="runButton" onclick="runNow()">抓取整理并执行</button>
   </section>
   <section class="card" style="margin-bottom:22px">
     <div class="panel-head"><div><h2>运行日志</h2><div class="log-note">显示搜索网站、候选数量、正文解析、去重、翻译和写入进度</div></div><div class="live" id="logStatus">等待任务</div></div>
     <div class="log-window" id="logs"><div class="empty">还没有运行日志，点击“抓取并整理新闻”开始。</div></div>
   </section>
   <section class="card">
-    <div class="panel-head"><h2>最新新闻</h2><div class="panel-actions"><div class="run" id="lastRun"></div><button class="mini" onclick="copyAllNews()">一键复制全部新闻</button></div></div>
+    <div class="panel-head"><div class="tabs"><button class="tab active" id="newsTab" onclick="switchTab('news')">最新新闻 <span id="newsCount">0</span></button><button class="tab" id="socialTab" onclick="switchTab('social')">社交平台动态 <span id="socialCount">0</span></button></div><div class="panel-actions"><div class="run" id="lastRun"></div><button class="mini" id="copyAllButton" onclick="copyAllCurrent()">一键复制全部新闻</button></div></div>
     <div id="articles"><div class="empty">尚无数据，点击“立即抓取”开始。</div></div>
   </section>
 </main>
@@ -90,18 +96,25 @@
   let tokenRequired = false;
   let refreshing = false;
   let currentArticles = [];
+  let currentSocial = [];
+  let activeTab = 'news';
   const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
   const dateText=value=>value?new Date(value).toLocaleString('zh-CN',{hour12:false}):'时间未知';
   const newsCopyText=a=>`【${a.country_name}】${a.title_zh||a.title}\n发布时间：${dateText(a.published_at)}\n内容简介：${a.summary_zh||a.summary||'暂无摘要'}\n来源：${a.source||'未知来源'}\n链接：${a.url}`;
   async function writeClipboard(text){try{await navigator.clipboard.writeText(text)}catch(e){const t=document.createElement('textarea');t.value=text;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove()}}
   async function copyArticle(id){const a=currentArticles.find(item=>item.id===id);if(!a)return;await writeClipboard(newsCopyText(a));showToast('已复制该条新闻、摘要和链接')}
+  const socialCopyText=a=>`【${a.platform_name}】${a.title_zh||a.title}\n贴文/发布时间：${dateText(a.published_at)}\n内容简介：${a.summary_zh||a.summary||'暂无摘要'}\n来源：${a.source||'未知来源'}\n链接：${a.url}`;
+  async function copySocial(id){const a=currentSocial.find(item=>item.id===id);if(!a)return;await writeClipboard(socialCopyText(a));showToast('已复制该条动态、简介、时间和链接')}
   async function copyAllNews(){const response=await fetch('/api/articles?limit=1000');const data=await response.json();const items=data.items||[];if(!items.length){showToast('没有可复制的新闻');return}await writeClipboard(items.map(newsCopyText).join('\n\n--------------------\n\n'));showToast(`已复制全部 ${items.length} 条新闻`)}
+  async function copyAllCurrent(){if(activeTab==='news'){return copyAllNews()}if(!currentSocial.length){showToast('没有可复制的社交平台动态');return}await writeClipboard(currentSocial.map(socialCopyText).join('\n\n--------------------\n\n'));showToast(`已复制全部 ${currentSocial.length} 条社交平台动态`)}
+  function switchTab(tab){activeTab=tab;document.querySelector('#newsTab').classList.toggle('active',tab==='news');document.querySelector('#socialTab').classList.toggle('active',tab==='social');document.querySelector('#copyAllButton').textContent=tab==='news'?'一键复制全部新闻':'一键复制全部社交动态';renderItems()}
+  function renderItems(){const box=document.querySelector('#articles');if(activeTab==='news'){box.innerHTML=currentArticles.length?currentArticles.map(a=>`<article class="article"><div class="country">${esc(a.country_name)}</div><div><h3>${esc(a.title_zh||a.title)}</h3><p>${esc(a.summary_zh||a.summary||'暂无摘要')}</p><div class="published">发布时间：${esc(dateText(a.published_at))}</div><div class="badges"><span class="badge">Teams ${a.teams_sent?'✓':'待发送'}</span><span class="badge">Sheets ${a.sheets_sent?'✓':'待写入'}</span></div></div><div class="source"><a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">${esc(a.source)} ↗</a><button class="mini" onclick="copyArticle(${a.id})">复制本条</button></div></article>`).join(''):'<div class="empty">尚无新闻，勾选“新闻”后运行任务。</div>'}else{box.innerHTML=currentSocial.length?currentSocial.map(a=>`<article class="article"><div class="country">${esc(a.platform_name)}</div><div><h3>${esc(a.title_zh||a.title)}</h3><p>${esc(a.summary_zh||a.summary||'暂无摘要')}</p><div class="published">贴文/发布时间：${esc(dateText(a.published_at))} · 采集：${esc(dateText(a.collected_at))}</div><div class="badges"><span class="badge">独立 Sheet ${a.sheets_sent?'✓':'待写入'}</span></div></div><div class="source"><a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">${esc(a.source)} ↗</a><button class="mini" onclick="copySocial(${a.id})">复制本条</button></div></article>`).join(''):'<div class="empty">尚无社交平台动态，勾选后运行任务。</div>'}}
   async function checkUpdate(){const button=document.querySelector('#updateButton');button.disabled=true;button.textContent='检查中…';try{const data=await fetch('/api/update-check').then(r=>r.json());showToast(data.message);if(data.update_available&&confirm(`${data.message}，是否打开下载页面？`))window.open(data.url,'_blank','noopener')}finally{button.disabled=false;button.textContent='检查更新'}}
   function readyLabel(ok, pending) { return `<span class="${ok ? 'ready':'warn'}">${ok ? (pending ? pending+' 待发送':'已连接') : '未配置'}</span>`; }
   async function refresh(){
     if(refreshing) return; refreshing=true;
-    let data;
-    try { data = await fetch('/api/status').then(r=>r.json()); } catch(e) { refreshing=false; return; }
+    let data,socialData;
+    try { [data,socialData] = await Promise.all([fetch('/api/status').then(r=>r.json()),fetch('/api/social/status').then(r=>r.json())]); } catch(e) { refreshing=false; return; }
     tokenRequired = data.config.token_required;
     document.querySelector('#version').textContent = `v${data.config.version}`;
     document.querySelector('#subtitle').textContent = `${data.config.countries.join('、')} · 每天 ${data.config.schedule} (${data.config.timezone})`;
@@ -109,8 +122,9 @@
     document.querySelector('#teams').innerHTML = data.config.teams_enabled ? readyLabel(data.config.teams_ready, data.stats.teams_pending) : '<span class="warn">已停用</span>';
     document.querySelector('#sheets').innerHTML = data.config.sheets_enabled ? readyLabel(data.config.sheets_ready, data.stats.sheets_pending) : '<span class="warn">已停用</span>';
     document.querySelector('#translation').innerHTML = readyLabel(data.config.translation_ready, 0).replace('已连接','已启用');
-    document.querySelector('#runButton').disabled = data.running;
-    document.querySelector('#runButton').textContent = data.running ? '处理中…' : '抓取并整理新闻';
+    const isRunning=data.running||socialData.running;
+    document.querySelector('#runButton').disabled = isRunning;
+    document.querySelector('#runButton').textContent = isRunning ? '处理中…' : '抓取整理并执行';
     const sheetsTarget = document.querySelector('#targetSheets');
     const teamsTarget = document.querySelector('#targetTeams');
     sheetsTarget.disabled = !(data.config.sheets_enabled && data.config.sheets_ready);
@@ -121,10 +135,10 @@
     const statusNames={success:'成功',partial:'部分完成',failed:'失败',running:'运行中'};
     document.querySelector('#lastRun').textContent = run ? `上次运行：${statusNames[run.status]||run.status} · 新增 ${run.collected_count}` : '';
     const logStatus=document.querySelector('#logStatus');
-    logStatus.className='live'+(data.running?' running':'');
-    logStatus.textContent=data.running?'正在处理…':(run?`已完成 · 新增 ${run.collected_count}`:'等待任务');
+    logStatus.className='live'+(isRunning?' running':'');
+    logStatus.textContent=isRunning?'正在处理…':(run?`已完成 · 新增 ${run.collected_count}`:'等待任务');
     const logBox=document.querySelector('#logs');
-    const stickToBottom=logBox.scrollHeight-logBox.scrollTop-logBox.clientHeight<55 || data.running;
+    const stickToBottom=logBox.scrollHeight-logBox.scrollTop-logBox.clientHeight<55 || isRunning;
     const levels={info:'进行',success:'成功',warning:'提醒',error:'错误'};
     logBox.innerHTML=(data.logs||[]).length ? data.logs.map(item=>{
       const time=new Date(item.created_at).toLocaleTimeString('zh-CN',{hour12:false});
@@ -132,12 +146,10 @@
     }).join('') : '<div class="empty">还没有运行日志，点击“抓取并整理新闻”开始。</div>';
     if(stickToBottom) logBox.scrollTop=logBox.scrollHeight;
     currentArticles = data.articles || [];
-    document.querySelector('#articles').innerHTML = currentArticles.length ? currentArticles.map(a => `
-      <article class="article">
-        <div class="country">${esc(a.country_name)}</div>
-        <div><h3>${esc(a.title_zh || a.title)}</h3><p>${esc(a.summary_zh || a.summary || '暂无摘要')}</p><div class="badges"><span class="badge">Teams ${a.teams_sent?'✓':'…'}</span><span class="badge">Sheets ${a.sheets_sent?'✓':'…'}</span></div></div>
-        <div class="source"><a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">${esc(a.source)} ↗</a><button class="mini" onclick="copyArticle(${a.id})">复制本条</button></div>
-      </article>`).join('') : '<div class="empty">尚无数据，点击“抓取并整理新闻”开始。</div>';
+    currentSocial = socialData.items || [];
+    document.querySelector('#newsCount').textContent=currentArticles.length;
+    document.querySelector('#socialCount').textContent=currentSocial.length;
+    renderItems();
     refreshing=false;
   }
   async function runNow(){
@@ -146,28 +158,12 @@
       token = localStorage.getItem('news-admin-token') || (prompt('请输入管理令牌：') || '');
       if(token) localStorage.setItem('news-admin-token', token);
     }
-    const response = await fetch('/api/run',{method:'POST',headers:{'X-Admin-Token':token}});
+    const payload={news:document.querySelector('#collectNews').checked,social:document.querySelector('#collectSocial').checked,sheets:document.querySelector('#targetSheets').checked,teams:document.querySelector('#targetTeams').checked};
+    if(!payload.news&&!payload.social){showToast('请至少选择新闻或社交平台动态');return}
+    const response = await fetch('/api/collect-selected',{method:'POST',headers:{'X-Admin-Token':token,'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const data = await response.json();
     const toast = document.querySelector('#toast'); toast.textContent = data.message || data.detail; toast.style.display='block'; setTimeout(()=>toast.style.display='none',3000);
     refresh(); setTimeout(()=>document.querySelector('#logs').scrollIntoView({behavior:'smooth',block:'center'}),250);
-  }
-  async function sendSelected(){
-    let token = '';
-    if(tokenRequired){
-      token = localStorage.getItem('news-admin-token') || (prompt('请输入管理令牌：') || '');
-      if(token) localStorage.setItem('news-admin-token', token);
-    }
-    const targets = {sheets:document.querySelector('#targetSheets').checked,teams:document.querySelector('#targetTeams').checked};
-    if(!targets.sheets && !targets.teams){ showToast('请至少选择一个发送目标'); return; }
-    const button = document.querySelector('#sendButton');
-    button.disabled = true; button.textContent = '发送中…';
-    try {
-      const response = await fetch('/api/send-selected',{method:'POST',headers:{'X-Admin-Token':token,'Content-Type':'application/json'},body:JSON.stringify(targets)});
-      const data = await response.json();
-      showToast(data.message || data.detail);
-    } finally {
-      button.disabled = false; button.textContent = '发送到所选目标'; refresh();
-    }
   }
   function showToast(message){ const toast=document.querySelector('#toast'); toast.textContent=message; toast.style.display='block'; setTimeout(()=>toast.style.display='none',6000); }
   refresh(); setInterval(refresh, 2000);

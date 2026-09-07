@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import unicodedata
 from typing import Any
@@ -22,6 +23,8 @@ DEFAULT_MODELS = {
 def settings_snapshot(settings: Settings) -> dict[str, Any]:
     translation = settings.raw.get("translation", {})
     destinations = settings.destinations
+    stored_keys = settings.translation_api_keys
+    provider_settings = translation.get("providers", {})
     return {
         "version": __version__,
         "countries": settings.countries,
@@ -51,6 +54,23 @@ def settings_snapshot(settings: Settings) -> dict[str, Any]:
             **translation,
             "api_key_configured": bool(settings.translation_api_key),
             "api_key": "",
+            "providers": [
+                {
+                    "provider": provider,
+                    "enabled": bool(provider_settings.get(provider, {}).get("enabled", True)),
+                    "model": provider_settings.get(provider, {}).get("model")
+                    or (translation.get("model") if translation.get("provider") == provider else None)
+                    or DEFAULT_MODELS[provider],
+                    "configured_keys": [
+                        {
+                            "id": settings.secret_id(key),
+                            "masked": f"••••••{key[-4:]}" if len(key) >= 4 else "••••••",
+                        }
+                        for key in stored_keys.get(provider, [])
+                    ],
+                }
+                for provider in ("gemini", "groq", "openai")
+            ],
         },
         "provider_defaults": DEFAULT_MODELS,
     }
@@ -175,6 +195,8 @@ def apply_settings(settings: Settings, payload: dict[str, Any]) -> None:
     provider = str(translation_payload.get("provider") or "local_llama")
     if provider not in PROVIDERS:
         raise ValueError("不支持的翻译服务")
+    # Capture legacy keys before changing the active provider.
+    existing_keys = settings.translation_api_keys
     translation = settings.raw.setdefault("translation", {})
     translation.update(
         {
@@ -190,6 +212,26 @@ def apply_settings(settings: Settings, payload: dict[str, Any]) -> None:
         }
     )
 
+    provider_payloads = translation_payload.get("providers")
+    if isinstance(provider_payloads, list):
+        provider_settings: dict[str, dict[str, Any]] = {}
+        for item in provider_payloads:
+            provider_name = str(item.get("provider") or "").strip()
+            if provider_name not in {"gemini", "groq", "openai"}:
+                continue
+            removed = {str(value) for value in item.get("remove_key_ids", [])}
+            kept = [
+                key for key in existing_keys.get(provider_name, [])
+                if settings.secret_id(key) not in removed
+            ]
+            additions = normalize_secret_list(item.get("new_keys", []))
+            existing_keys[provider_name] = list(dict.fromkeys(kept + additions))
+            provider_settings[provider_name] = {
+                "enabled": bool(item.get("enabled", True)),
+                "model": str(item.get("model") or DEFAULT_MODELS[provider_name]).strip(),
+            }
+        translation["providers"] = provider_settings
+
     secrets: dict[str, str | None] = {
         "TEAMS_WEBHOOK_URL": secret_update(
             teams_payload, "webhook_url", "clear_webhook"
@@ -204,6 +246,20 @@ def apply_settings(settings: Settings, payload: dict[str, Any]) -> None:
             translation_payload, "api_key", "clear_api_key"
         ),
     }
+    if isinstance(provider_payloads, list):
+        secrets["TRANSLATION_API_KEYS_JSON"] = json.dumps(
+            existing_keys, ensure_ascii=True, separators=(",", ":")
+        )
+        # The consolidated store supersedes 1.x single-key variables. Clearing them
+        # also makes individual deletion in the new UI deterministic.
+        secrets.update(
+            {
+                "TRANSLATION_API_KEY": "",
+                "GEMINI_API_KEY": "",
+                "GROQ_API_KEY": "",
+                "OPENAI_API_KEY": "",
+            }
+        )
     settings.update_secrets(secrets)
     settings.persist()
 
@@ -216,6 +272,17 @@ def normalize_list(value: Any) -> list[str]:
         for item in re.split(r"[,;，；\n]+", str(value or ""))
         if item.strip()
     ]
+
+
+def normalize_secret_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    result: list[str] = []
+    for item in value:
+        key = str(item or "").strip()
+        if key and "\n" not in key and "\r" not in key and key not in result:
+            result.append(key)
+    return result
 
 
 def valid_country_id(value: str) -> bool:

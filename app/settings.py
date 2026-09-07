@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import json
+import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -94,6 +96,40 @@ class Settings:
         return os.getenv("TRANSLATION_API_KEY", "").strip() or (
             os.getenv(provider_env, "").strip() if provider_env else ""
         )
+
+    @property
+    def translation_api_keys(self) -> dict[str, list[str]]:
+        """Return all configured cloud keys, while remaining compatible with 1.x installs."""
+        result: dict[str, list[str]] = {"gemini": [], "groq": [], "openai": []}
+        raw_json = os.getenv("TRANSLATION_API_KEYS_JSON", "").strip()
+        if raw_json:
+            try:
+                stored = json.loads(raw_json)
+                for provider in result:
+                    values = stored.get(provider, []) if isinstance(stored, dict) else []
+                    if isinstance(values, list):
+                        result[provider] = [str(value).strip() for value in values if str(value).strip()]
+            except (TypeError, ValueError, json.JSONDecodeError):
+                pass
+        legacy_names = {
+            "gemini": "GEMINI_API_KEY",
+            "groq": "GROQ_API_KEY",
+            "openai": "OPENAI_API_KEY",
+        }
+        active = self.raw.get("translation", {}).get("provider", "openai")
+        legacy_generic = os.getenv("TRANSLATION_API_KEY", "").strip()
+        for provider, env_name in legacy_names.items():
+            candidates = [os.getenv(env_name, "").strip()]
+            if provider == active:
+                candidates.insert(0, legacy_generic)
+            for key in candidates:
+                if key and key not in result[provider]:
+                    result[provider].append(key)
+        return result
+
+    @staticmethod
+    def secret_id(value: str) -> str:
+        return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
 
     @property
     def admin_token(self) -> str:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock
 
 from app.collector import (
     compact_summary,
@@ -16,9 +17,10 @@ from app.collector import (
 )
 from app.database import Database
 from app.deliveries import TeamsSender
+from app.pipeline import Pipeline
 from app.social import RECOMMENDED_SOCIAL_TOPICS, social_keywords
 from app.settings_api import bounded_int, normalize_domains, normalize_list, normalize_urls, slugify_country
-from app.translator import extract_key_points, translation_instruction
+from app.translator import can_translate, extract_key_points, provider_candidates, translation_instruction
 from app.web import version_tuple
 
 
@@ -198,9 +200,51 @@ class SettingsAndTranslationTests(unittest.TestCase):
         self.assertEqual(extract_key_points(source), "One. Two. Three.")
         self.assertIn("不要逐字翻译全文", translation_instruction())
 
+    def test_multiple_provider_keys_are_available_for_rotation_and_failover(self):
+        config = {
+            "enabled": True,
+            "provider": "gemini",
+            "providers": {
+                "gemini": {"enabled": True, "model": "gemini-test"},
+                "groq": {"enabled": True, "model": "groq-test"},
+                "openai": {"enabled": False, "model": "openai-test"},
+            },
+            "_api_keys": {"gemini": ["g-one", "g-two"], "groq": ["q-one"]},
+        }
+        candidates = provider_candidates(config)
+        self.assertTrue(can_translate(config))
+        self.assertEqual({item["_api_key"] for item in candidates}, {"g-one", "g-two", "q-one"})
+        self.assertNotIn("openai", {item["provider"] for item in candidates})
+
     def test_version_comparison_handles_release_tags(self):
         self.assertGreater(version_tuple("v1.4.2"), version_tuple("1.4.1"))
         self.assertEqual(version_tuple("v1.4.1"), version_tuple("1.4.1"))
+
+
+class CombinedWorkflowTests(unittest.TestCase):
+    def test_unchecked_destinations_never_send(self):
+        pipeline = object.__new__(Pipeline)
+        pipeline._log = MagicMock()
+        pipeline.run = MagicMock(return_value={"status": "success", "collected": 2})
+        pipeline.run_social = MagicMock(return_value={"status": "success", "collected": 3})
+        pipeline.send_selected = MagicMock()
+        pipeline.send_social_to_sheets = MagicMock()
+        result = pipeline.run_combined(news=True, social=True, sheets=False, teams=False)
+        self.assertEqual(result["collected"], 5)
+        pipeline.send_selected.assert_not_called()
+        pipeline.send_social_to_sheets.assert_not_called()
+
+    def test_checked_sheets_writes_both_content_types_once(self):
+        pipeline = object.__new__(Pipeline)
+        pipeline._log = MagicMock()
+        pipeline.run = MagicMock(return_value={"status": "success", "collected": 1})
+        pipeline.run_social = MagicMock(return_value={"status": "success", "collected": 1})
+        pipeline.send_selected = MagicMock(return_value={"status": "success", "sent": 4})
+        pipeline.send_social_to_sheets = MagicMock(return_value={"status": "success", "sent": 2})
+        result = pipeline.run_combined(news=True, social=True, sheets=True, teams=False)
+        pipeline.send_selected.assert_called_once_with(sheets=True, teams=False)
+        pipeline.send_social_to_sheets.assert_called_once_with()
+        self.assertEqual(result["sent"], 6)
 
 
 if __name__ == "__main__":

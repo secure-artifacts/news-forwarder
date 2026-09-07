@@ -119,6 +119,8 @@ def main() -> None:
             assert client.get("/social").status_code == 200
             assert client.get("/api/social/status").status_code == 200
             assert client.get("/api/articles?limit=10").status_code == 200
+            assert client.post("/api/collect-selected", json={}).status_code == 400
+            assert client.post("/api/select-credentials-file").status_code == 403
         return
 
     stdout_log = (root / "server.out.log").open("a", encoding="utf-8")

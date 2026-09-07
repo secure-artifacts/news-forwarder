@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from . import __version__
 from .database import Database
 from .local_model import LocalModelServer
+from .native_dialogs import select_json_file
 from .pipeline import Pipeline
 from .settings import Settings
 from .settings_api import apply_settings, settings_snapshot
@@ -137,6 +138,7 @@ def create_app(settings: Settings) -> FastAPI:
         result["running"] = pipeline.running
         translation_config = dict(settings.raw.get("translation", {}))
         translation_config["_api_key"] = settings.translation_api_key
+        translation_config["_api_keys"] = settings.translation_api_keys
         translation_ready = can_translate(translation_config)
         if translation_config.get("provider") == "local_llama":
             translation_ready = translation_ready and local_model.healthy()
@@ -240,6 +242,27 @@ def create_app(settings: Settings) -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @app.post("/api/select-credentials-file")
+    def select_credentials_file(
+        x_admin_token: str = Header(default=""), x_local_ui: str = Header(default="")
+    ):
+        """Open a native Windows chooser; no file content is uploaded through HTTP."""
+        require_admin(settings, x_admin_token)
+        if x_local_ui != "news-forwarder":
+            raise HTTPException(status_code=403, detail="该操作只能从软件设置页面发起")
+        try:
+            selected = select_json_file()
+            if not selected:
+                return {"selected": False, "path": "", "message": "已取消选择"}
+            path = Path(selected).resolve()
+            if path.suffix.casefold() != ".json" or not path.is_file():
+                raise ValueError("请选择有效的 JSON 文件")
+            return {"selected": True, "path": str(path), "message": "已选择服务账号文件"}
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"无法打开文件选择窗口：{exc}") from exc
+
     @app.post("/api/run", status_code=202)
     def run_now(background_tasks: BackgroundTasks, x_admin_token: str = Header(default="")):
         require_admin(settings, x_admin_token)
@@ -247,6 +270,27 @@ def create_app(settings: Settings) -> FastAPI:
             return {"accepted": False, "message": "抓取任务正在运行"}
         background_tasks.add_task(pipeline.run)
         return {"accepted": True, "message": "抓取任务已启动"}
+
+    @app.post("/api/collect-selected", status_code=202)
+    def collect_selected(
+        payload: dict, background_tasks: BackgroundTasks,
+        x_admin_token: str = Header(default=""),
+    ):
+        require_admin(settings, x_admin_token)
+        news = bool(payload.get("news", False))
+        social = bool(payload.get("social", False))
+        if not news and not social:
+            raise HTTPException(status_code=400, detail="请至少选择新闻或社交平台动态")
+        if pipeline.running:
+            return {"accepted": False, "message": "其他抓取任务正在运行"}
+        background_tasks.add_task(
+            pipeline.run_combined,
+            news,
+            social,
+            bool(payload.get("sheets", False)),
+            bool(payload.get("teams", False)),
+        )
+        return {"accepted": True, "message": "抓取、整理与所选写入任务已启动"}
 
     @app.post("/api/social/run", status_code=202)
     def run_social(background_tasks: BackgroundTasks, x_admin_token: str = Header(default="")):

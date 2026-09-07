@@ -16,9 +16,9 @@
     input[type=checkbox]{width:18px;height:18px;margin:0;accent-color:var(--cyan)}.check{display:flex;align-items:center;gap:9px;color:var(--text);font-size:14px}.check-row{display:flex;gap:24px;flex-wrap:wrap;margin-bottom:17px}
     button{border:0;border-radius:11px;background:var(--cyan);color:#06201e;padding:11px 17px;font-weight:800;cursor:pointer}button.secondary{background:#17304a;color:var(--text);border:1px solid var(--line)}button.danger{background:transparent;color:var(--red);border:1px solid #663b48}button:disabled{opacity:.5}
     .country{border:1px solid var(--line);border-radius:14px;padding:17px;margin-bottom:13px;background:#09172888}.country-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.country-title{font-weight:800;color:var(--cyan)}
-    .status{display:inline-flex;border:1px solid var(--line);border-radius:99px;padding:4px 9px;color:var(--cyan);font-size:12px;margin-left:7px}.secret-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}
+    .status{display:inline-flex;border:1px solid var(--line);border-radius:99px;padding:4px 9px;color:var(--cyan);font-size:12px;margin-left:7px}.secret-row,.file-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.provider-list{display:grid;gap:12px;margin-top:17px}.provider-card{border:1px solid var(--line);border-radius:13px;padding:16px;background:#09172888}.provider-head{display:flex;justify-content:space-between;gap:15px;align-items:center;margin-bottom:12px}.key-list{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.key-chip{display:flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:999px;padding:6px 9px;color:var(--muted);font-size:12px}.new-keys{display:grid;gap:8px}.new-key-row{display:grid;grid-template-columns:1fr auto;gap:8px}
     .savebar{position:fixed;left:0;right:0;bottom:0;background:#07111fe8;backdrop-filter:blur(16px);border-top:1px solid var(--line);padding:13px}.savebar-inner{width:min(1100px,calc(100% - 32px));margin:auto;display:flex;justify-content:space-between;align-items:center}.message{color:var(--muted)}
-    @media(max-width:760px){.grid,.grid.three{grid-template-columns:1fr}.secret-row{grid-template-columns:1fr}.section{padding:17px}header{align-items:flex-start}.savebar-inner{gap:12px}.message{font-size:12px}}
+    @media(max-width:760px){.grid,.grid.three{grid-template-columns:1fr}.secret-row,.file-row{grid-template-columns:1fr}.section{padding:17px}header{align-items:flex-start}.savebar-inner{gap:12px}.message{font-size:12px}}
   </style>
 </head>
 <body>
@@ -61,7 +61,7 @@
       <label>Teams 消息格式<select id="teamsMode"><option value="adaptive_card">Adaptive Card</option><option value="text">简单文本</option></select></label>
       <label>Google Spreadsheet ID<input id="spreadsheetId" autocomplete="off"></label>
       <label>工作表名称<input id="worksheetName" value="News"></label>
-      <label style="grid-column:1/-1">Google 服务账号 JSON 完整路径<input id="credentialsPath" autocomplete="off" placeholder="C:\path\service-account.json"></label>
+      <div style="grid-column:1/-1"><label>Google 服务账号 JSON 文件</label><div class="file-row"><input id="credentialsPath" autocomplete="off" placeholder="点击右侧按钮选择 credentials.json"><button type="button" class="secondary" onclick="selectCredentialsFile()">选择文件…</button></div><span class="hint">使用 Windows 文件选择窗口，选中后会自动填入完整路径。</span></div>
     </div>
   </section>
 
@@ -69,14 +69,11 @@
     <div class="section-head"><div><h2>中文重点翻译</h2><div class="hint">只根据标题和提取出的关键句生成中文标题、重点摘要，不翻译全文。</div></div></div>
     <div class="check-row"><label class="check"><input id="translationEnabled" type="checkbox"> 启用中文整理</label></div>
     <div class="grid">
-      <label>翻译方式<select id="provider" onchange="providerChanged()"><option value="local_llama">本地 TranslateGemma（无密钥）</option><option value="gemini">Google Gemini API</option><option value="groq">Groq API</option><option value="openai">OpenAI API</option></select></label>
-      <label>模型名称<input id="model" autocomplete="off"></label>
-      <div>
-        <label>API Key <span class="status" id="apiKeyStatus">未配置</span><input id="apiKey" type="password" placeholder="本地模式无需填写；留空保留已有密钥"></label>
-        <label class="check" style="margin-top:10px"><input id="clearApiKey" type="checkbox"> 清除已有 API Key</label>
-      </div>
-      <div class="hint" style="align-self:center">Gemini、Groq、OpenAI 需要各自的 API Key。本地模式完全离线。</div>
+      <label>首选翻译方式<select id="provider" onchange="providerChanged()"><option value="local_llama">本地 TranslateGemma（无密钥）</option><option value="gemini">Google Gemini API</option><option value="groq">Groq API</option><option value="openai">OpenAI API</option></select></label>
+      <label id="localModelWrap">本地模型名称<input id="model" autocomplete="off"></label>
+      <div class="hint" style="grid-column:1/-1">云端模式会在下方所有已启用平台及密钥之间轮询；遇到限额或失败自动尝试下一条。本地模式完全离线。</div>
     </div>
+    <div class="provider-list" id="providerKeys"></div>
   </section>
 
   <section class="section">
@@ -128,6 +125,11 @@
     </div></div>`;
   }
   function addSocialSource(){document.getElementById('socialSources').insertAdjacentHTML('beforeend',socialCard())}
+  const providerNames={gemini:'Google Gemini',groq:'Groq',openai:'OpenAI'};
+  function providerCard(p){return `<div class="provider-card" data-provider="${esc(p.provider)}"><div class="provider-head"><strong>${esc(providerNames[p.provider]||p.provider)}</strong><label class="check"><input data-provider-enabled type="checkbox" ${p.enabled===false?'':'checked'}> 启用轮询/备用</label></div><label>模型名称<input data-provider-model value="${esc(p.model||state.provider_defaults[p.provider]||'')}"></label><div class="key-list">${(p.configured_keys||[]).map(k=>`<label class="key-chip"><input type="checkbox" data-remove-key="${esc(k.id)}"> 删除 ${esc(k.masked)}</label>`).join('')||'<span class="hint">尚无已保存密钥</span>'}</div><div class="new-keys"></div><button type="button" class="secondary" onclick="addProviderKey('${esc(p.provider)}')">＋ 添加密钥</button></div>`}
+  function addProviderKey(provider){const box=document.querySelector(`[data-provider="${provider}"] .new-keys`);box.insertAdjacentHTML('beforeend',`<div class="new-key-row"><input type="password" data-new-key autocomplete="new-password" placeholder="粘贴新的 API Key"><button type="button" class="danger" onclick="this.parentElement.remove()">移除</button></div>`)}
+  function providersPayload(){return [...document.querySelectorAll('[data-provider]')].map(card=>({provider:card.dataset.provider,enabled:card.querySelector('[data-provider-enabled]').checked,model:card.querySelector('[data-provider-model]').value,new_keys:[...card.querySelectorAll('[data-new-key]')].map(i=>i.value).filter(Boolean),remove_key_ids:[...card.querySelectorAll('[data-remove-key]:checked')].map(i=>i.dataset.removeKey)}))}
+  async function selectCredentialsFile(){try{const response=await fetch('/api/select-credentials-file',{method:'POST',headers:{'X-Admin-Token':token,'X-Local-UI':'news-forwarder'}});const data=await response.json();if(response.ok&&data.selected){document.getElementById('credentialsPath').value=data.path;document.getElementById('message').textContent='已选择文件，请点击“保存全部设置”'}else if(!response.ok){document.getElementById('message').textContent=data.detail||'无法选择文件'}}catch(e){document.getElementById('message').textContent='无法打开文件选择窗口：'+e.message}}
   async function loadSettings(){
     token=localStorage.getItem('news-admin-token')||'';
     let response=await fetch('/api/settings',{headers:{'X-Admin-Token':token}});
@@ -158,8 +160,8 @@
     document.getElementById('teamsSecretStatus').textContent=d.teams.webhook_configured?'已配置':'未配置';
     document.getElementById('translationEnabled').checked=t.enabled;
     document.getElementById('provider').value=t.provider;
-    document.getElementById('model').value=t.model||state.provider_defaults[t.provider];
-    document.getElementById('apiKeyStatus').textContent=t.api_key_configured?'已配置':'未配置';
+    document.getElementById('model').value=t.provider==='local_llama'?(t.model||state.provider_defaults.local_llama):state.provider_defaults.local_llama;
+    document.getElementById('providerKeys').innerHTML=(t.providers||[]).map(providerCard).join('');
     document.getElementById('timezone').value=a.timezone;
     document.getElementById('scheduleHour').value=a.schedule_hour;
     document.getElementById('scheduleMinute').value=a.schedule_minute;
@@ -167,11 +169,11 @@
     document.getElementById('maxArticles').value=a.max_articles_per_country;
     providerChanged(false);
   }
-  function providerChanged(reset=true){ const p=value('provider'); if(reset&&state)document.getElementById('model').value=state.provider_defaults[p]; const local=p==='local_llama'; document.getElementById('apiKey').disabled=local; document.getElementById('clearApiKey').disabled=local; }
+  function providerChanged(reset=true){ const p=value('provider'); const local=p==='local_llama'; document.getElementById('localModelWrap').style.display=local?'block':'none'; if(reset&&local&&state)document.getElementById('model').value=state.provider_defaults.local_llama; }
   function countriesPayload(){ return [...document.querySelectorAll('#countries .country')].map(card=>{ const o={id:card.dataset.countryId||''}; card.querySelectorAll('[data-k]').forEach(i=>o[i.dataset.k]=i.value); return o; }); }
   function socialPayload(){return [...document.querySelectorAll('#socialSources .country')].map(card=>{const o={};card.querySelectorAll('[data-s]').forEach(i=>o[i.dataset.s]=i.value);card.querySelectorAll('[data-s-check]').forEach(i=>o[i.dataset.sCheck]=i.checked);return o})}
   async function saveSettings(){
-    const payload={countries:countriesPayload(),social_monitor:{enabled:checked('socialEnabled'),automatic_sheets:checked('socialAutoSheets'),include_recommended_topics:checked('socialRecommended'),interval_minutes:+value('socialInterval'),max_age_hours:+value('socialLookbackDays')*24,max_items_per_source:+value('socialMaxItems'),worksheet_name:value('socialWorksheet'),sources:socialPayload()},app:{timezone:value('timezone'),schedule_hour:+value('scheduleHour'),schedule_minute:+value('scheduleMinute'),max_age_hours:+value('maxAgeHours'),max_articles_per_country:+value('maxArticles')},destinations:{automatic_delivery:checked('autoDelivery'),teams:{enabled:checked('teamsEnabled'),payload_mode:value('teamsMode'),max_articles_per_message:8,webhook_url:value('teamsWebhook'),clear_webhook:checked('clearTeamsWebhook')},google_sheets:{enabled:checked('sheetsEnabled'),spreadsheet_id:value('spreadsheetId'),worksheet_name:value('worksheetName'),credentials_path:value('credentialsPath')}},translation:{enabled:checked('translationEnabled'),provider:value('provider'),model:value('model'),api_key:value('apiKey'),clear_api_key:checked('clearApiKey')}};
+    const providerConfigs=providersPayload();const selectedProvider=value('provider');const selectedCloud=providerConfigs.find(p=>p.provider===selectedProvider);const payload={countries:countriesPayload(),social_monitor:{enabled:checked('socialEnabled'),automatic_sheets:checked('socialAutoSheets'),include_recommended_topics:checked('socialRecommended'),interval_minutes:+value('socialInterval'),max_age_hours:+value('socialLookbackDays')*24,max_items_per_source:+value('socialMaxItems'),worksheet_name:value('socialWorksheet'),sources:socialPayload()},app:{timezone:value('timezone'),schedule_hour:+value('scheduleHour'),schedule_minute:+value('scheduleMinute'),max_age_hours:+value('maxAgeHours'),max_articles_per_country:+value('maxArticles')},destinations:{automatic_delivery:checked('autoDelivery'),teams:{enabled:checked('teamsEnabled'),payload_mode:value('teamsMode'),max_articles_per_message:8,webhook_url:value('teamsWebhook'),clear_webhook:checked('clearTeamsWebhook')},google_sheets:{enabled:checked('sheetsEnabled'),spreadsheet_id:value('spreadsheetId'),worksheet_name:value('worksheetName'),credentials_path:value('credentialsPath')}},translation:{enabled:checked('translationEnabled'),provider:selectedProvider,model:selectedProvider==='local_llama'?value('model'):(selectedCloud?.model||state.provider_defaults[selectedProvider]),providers:providerConfigs}};
     const button=document.getElementById('saveButton'); button.disabled=true; document.getElementById('message').textContent='正在保存…';
     try{ const response=await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json','X-Admin-Token':token},body:JSON.stringify(payload)}); const data=await response.json(); document.getElementById('message').textContent=data.message||data.detail; if(response.ok)await loadSettings(); }
     catch(e){document.getElementById('message').textContent='保存失败：'+e.message} finally{button.disabled=false}

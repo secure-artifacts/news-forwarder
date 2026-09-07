@@ -13,6 +13,16 @@ translation:
   source_language: Portuguese
   source_code: pt
   key_points_only: true
+  providers:
+    gemini:
+      enabled: true
+      model: gemini-3.7-flash
+    groq:
+      enabled: true
+      model: openai/gpt-oss-120b
+    openai:
+      enabled: true
+      model: gpt-5.4-mini
 destinations:
   automatic_delivery: false
   teams:

@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
+import threading
 from typing import Any
 
 import httpx
+
+
+logger = logging.getLogger(__name__)
+_rotation_lock = threading.Lock()
+_rotation_index = 0
 
 
 TRANSLATION_SCHEMA = {
@@ -48,14 +55,12 @@ def can_translate(config: dict[str, Any]) -> bool:
         return False
     if config.get("provider") == "local_llama":
         return True
-    return bool(api_key_for(config))
+    return bool(provider_candidates(config))
 
 
 def translate_articles(articles: list[dict[str, Any]], config: dict[str, Any]) -> list[dict[str, Any]]:
     if not articles or not can_translate(config):
         return []
-    if config.get("provider") == "local_llama":
-        return translate_articles_local(articles, config)
     payload = [
         {
             "id": item["id"],
@@ -64,12 +69,57 @@ def translate_articles(articles: list[dict[str, Any]], config: dict[str, Any]) -
         }
         for item in articles
     ]
+    errors: list[str] = []
+    for candidate in provider_candidates(config):
+        provider = candidate["provider"]
+        attempt_config = {**config, **candidate}
+        try:
+            if provider == "local_llama":
+                return translate_articles_local(articles, attempt_config)
+            return translate_payload(payload, attempt_config)
+        except Exception as exc:
+            errors.append(f"{provider}: {type(exc).__name__}")
+            logger.warning("Translation provider %s failed; trying the next configured key", provider)
+    raise RuntimeError("所有已启用的翻译平台或密钥均失败（" + "，".join(errors) + "）")
+
+
+def translate_payload(payload: list[dict[str, Any]], config: dict[str, Any]) -> list[dict[str, Any]]:
     provider = config.get("provider", "openai")
     if provider == "gemini":
         return translate_articles_gemini(payload, config)
     if provider == "groq":
         return translate_articles_groq(payload, config)
     return translate_articles_openai(payload, config)
+
+
+def provider_candidates(config: dict[str, Any]) -> list[dict[str, Any]]:
+    """Build a round-robin failover list without exposing secret values to the UI."""
+    active = str(config.get("provider") or "local_llama")
+    if active == "local_llama":
+        return [{"provider": "local_llama", "model": config.get("model", "translategemma-4b")}]
+    all_keys = config.get("_api_keys", {})
+    provider_settings = config.get("providers", {})
+    providers = [active] + [name for name in ("gemini", "groq", "openai") if name != active]
+    candidates: list[dict[str, Any]] = []
+    for provider in providers:
+        detail = provider_settings.get(provider, {}) if isinstance(provider_settings, dict) else {}
+        if detail.get("enabled", True) is False:
+            continue
+        keys = all_keys.get(provider, []) if isinstance(all_keys, dict) else []
+        if not keys and provider == active:
+            legacy = api_key_for(config)
+            keys = [legacy] if legacy else []
+        model = detail.get("model") or (config.get("model") if provider == active else None)
+        for key in keys:
+            if str(key).strip():
+                candidates.append({"provider": provider, "model": model, "_api_key": str(key).strip()})
+    if len(candidates) < 2:
+        return candidates
+    global _rotation_index
+    with _rotation_lock:
+        start = _rotation_index % len(candidates)
+        _rotation_index += 1
+    return candidates[start:] + candidates[:start]
 
 
 def translation_instruction() -> str:
